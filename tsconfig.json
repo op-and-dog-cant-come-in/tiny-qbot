@@ -1,0 +1,17 @@
+{
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "baseUrl": ".",
+    "verbatimModuleSyntax": true
+  },
+  "ts-node": {
+    "esm": true
+  }
+}

@@ -1,0 +1,18 @@
+# docker-compose.yml
+version: '3'
+services:
+  napcat:
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID}
+      - NAPCAT_GID=${NAPCAT_GID}
+      - ACCOUNT=<%= ACCOUNT %>
+    ports:
+      - 3000:3000
+      - <%= WS_PORT %>:3001
+      - 6099:6099
+    volumes:
+      - ./onebot11.json:/app/napcat/config/onebot11_<%= ACCOUNT %>.json
+    container_name: napcat
+    network_mode: bridge
+    restart: always
+    image: mlikiowa/napcat-docker:latest

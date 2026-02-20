@@ -1,0 +1,24 @@
+{
+  "network": {
+    "httpServers": [],
+    "httpSseServers": [],
+    "httpClients": [],
+    "websocketServers": [
+      {
+        "name": "WebSocketServer",
+        "enable": true,
+        "host": "0.0.0.0",
+        "port": 3001,
+        "heartInterval": 30000,
+        "enableForcePushEvent": true,
+        "token": ""
+      }
+    ],
+    "websocketClients": [],
+    "plugins": []
+  },
+  "musicSignUrl": "",
+  "enableLocalFile2Url": false,
+  "parseMultMsg": false,
+  "imageDownloadProxy": ""
+}
