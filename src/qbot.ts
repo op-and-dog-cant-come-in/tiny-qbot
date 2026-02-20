@@ -88,7 +88,7 @@ export class QBot {
     }));
 
     client.on('message.group', async (data: GroupMessageEvent) => {
-      console.log('*️⃣ 收到群组消息\n', data);
+      console.log('✍️ 收到群组消息\n', data);
 
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
@@ -127,6 +127,21 @@ export class QBot {
       for (const item of this.plugins) {
         item.onGroupMessage?.(data, info);
       }
+    });
+
+    client.on('notice.notify.poke', async (data: GroupMessageEvent) => {
+      console.log('✍️ 收到戳一戳消息\n', data);
+
+      // 如果不是目标群组的消息，直接忽略
+      if (this.targetGroup !== String(data.group_id)) return;
+
+      for (const item of this.plugins) {
+        item.onPoke?.(data);
+      }
+    });
+
+    client.on('raw', data => {
+      console.log('✍️ 收到原始事件消息:\n', data);
     });
 
     await client.connect();
