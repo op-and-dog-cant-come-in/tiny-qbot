@@ -1,11 +1,15 @@
 import path from 'node:path';
 import { styleText } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import fs from 'fs-extra';
 import NapLink, { type GroupMessageEvent } from '@naplink/naplink';
 import getPort from 'get-port';
 import { execa } from 'execa';
-import { debounce, replaceAllAsync, tryReadJson } from './utils/index.ts';
+import { debounce, replaceAllAsync, tryReadJson, WorkerScheduler } from '../utils/index.ts';
 import dayjs from 'dayjs';
+import type { AddHistoryParams, GetRecentHistoryParams, MessageRecord } from './types.ts';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** 保存消息记录的文件路径 */
 const HISTORY_PATH = 'history.json';
@@ -26,31 +30,26 @@ export class QBot {
   /** napcat 的 ws 连接端口 */
   wsPort: number;
 
-  /** 保存消息记录 */
-  history: string[] = [];
-  saveHistory = debounce(async () => {
-    await fs.writeJson(HISTORY_PATH, this.history, { spaces: 2 });
-    console.log('✅ 消息记录保存成功');
-  }, 5000);
+  /** 保存消息记录等内容的数据库 worker 句柄 */
+  db: WorkerScheduler;
 
   constructor(options: QBotInitOptions) {
     this.account = options.account;
     this.targetGroup = options.group;
     this.plugins = options.plugins;
+    this.db = new WorkerScheduler(path.join(__dirname, 'database.worker.ts'), { groupId: this.targetGroup });
   }
 
   async setup() {
-    // 读取历史记录文件，记录最近 30 条消息
-    const history = (this.history = await tryReadJson(HISTORY_PATH, []));
-
     // 初始化插件
     await Promise.all(
       this.plugins.map(async item => {
         await item.install?.(this);
-        console.log(`✅ 插件${styleText('green', item.name)} 初始化完毕`);
+        console.log(`✅ 插件初始化完毕: ${styleText('green', item.name)}`);
       })
     );
 
+    /** 获取一个空闲的端口用作 ws 连接 */
     const wsPort = (this.wsPort = await getPort());
 
     // 构造 docker-compose.yml 配置文件
@@ -71,6 +70,7 @@ export class QBot {
         resolve();
       }
 
+      // 实际测试表明断连消息不一定发送成功，只是作为一种提醒方案
       if (data.toString().includes('[KickedOffLine]')) {
         this.naplink.sendGroupMessage(this.targetGroup, '[CQ:at,qq=2548705244] 登录要失效了喵，赶紧重新登录喵');
       }
@@ -87,50 +87,26 @@ export class QBot {
       },
     }));
 
+    // naplink 事件统一由 qbot 监听，触发对应的插件监听器函数
+    // 插件通常不应独立监听 naplink 事件
     client.on('message.group', async (data: GroupMessageEvent) => {
-      console.log('✍️ 收到群组消息\n', data);
+      console.log('✍️ 收到群组消息');
+      console.dir(data, { depth: null });
 
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
 
-      /** 去除两侧空白，将 @ 命令进行简写，并将 reply 字段消息展开后的 raw_message 结果 */
-      let message = data.raw_message;
-
-      // 提取出 reply 字段的消息，最多提取三层
-      for (let i = 0; i < 3; ++i) {
-        const result = await replaceAllAsync(message, /\[CQ:reply,id=\d+\]/g, async matched => {
-          const id = matched.slice(13, -1);
-          const refer = await this.naplink.getMessage(id).catch(() => ({ raw_message: `消息不存在` }));
-          return `<refer>${refer.raw_message}</refer>`;
-        });
-
-        if (result === message) break;
-
-        message = result;
-      }
-
-      // 记录群组历史消息，按 [time] [user_id]: [raw_message] 格式
-      message = message
-        .replaceAll(/\[CQ:at,qq=(\d+)\]/g, '@$1')
-        .replaceAll(/\[CQ:[^\]]+\]/g, '')
-        .trim();
-
-      if (message) {
-        history.push(`${dayjs.unix(data.time).format('YY:MM:DD:HH:mm')} ${data.user_id}: ${message}`);
-        this.saveHistory();
-      }
-
-      const info = {
-        resolvedRawMessage: message,
-      };
+      // 记录消息结果
+      await this.addHistory(String(data.message_id), String(data.user_id), data.raw_message, data.time);
 
       for (const item of this.plugins) {
-        item.onGroupMessage?.(data, info);
+        item.onGroupMessage?.(data);
       }
     });
 
     client.on('notice.notify.poke', async (data: GroupMessageEvent) => {
-      console.log('✍️ 收到戳一戳消息\n', data);
+      console.log('✍️ 收到戳一戳消息');
+      console.log(data);
 
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
@@ -140,16 +116,44 @@ export class QBot {
       }
     });
 
-    client.on('raw', data => {
-      console.log('✍️ 收到原始事件消息:\n', data);
-    });
+    // client.on('raw', data => {
+    //   console.log('✍️ 收到原始事件消息:');
+    //   console.log(data);
+    // });
 
     await client.connect();
     await client.sendGroupMessage(this.targetGroup, '猫猫上线了喵');
     console.log(`🚀 ${styleText('green', 'QBot 启动完毕')}`);
   }
+
+  /** 向数据库添加一条消息记录 */
+  async addHistory(messageId: string | number, sender: string | number, rawMessage: string, timeStamp: number) {
+    // 注意 id 可能由于精度原因存在小数部分，需仅保留整数
+    const params: AddHistoryParams = {
+      type: 'add-history',
+      messageId: String(messageId).split('.')[0],
+      sender: String(sender).split('.')[0],
+      rawMessage,
+      timeStamp,
+    };
+
+    await this.db.runTask(params);
+  }
+
+  /** 获取最近的 n 条记录 */
+  async getRecentHistory(count: number): Promise<MessageRecord[]> {
+    const params: GetRecentHistoryParams = {
+      type: 'get-recent-history',
+      recent: count,
+    };
+
+    const result = await this.db.runTask(params);
+
+    return (result as any).result;
+  }
 }
 
+/** QBot 类初始化参数 */
 export interface QBotInitOptions {
   /** 机器人登录的 qq 号 */
   account: string;
@@ -161,6 +165,7 @@ export interface QBotInitOptions {
   plugins: QBotPlugin[];
 }
 
+/** QBot 插件需要满足的格式 */
 export interface QBotPlugin {
   /** 插件名称 */
   name: string;
@@ -169,12 +174,8 @@ export interface QBotPlugin {
   install?: (qbot: QBot) => Promise<void>;
 
   /** 在收到群消息时触发的 hook 函数 */
-  onGroupMessage?: (data: GroupMessageEvent, info: QBotMessageInfo) => void;
+  onGroupMessage?: (data: GroupMessageEvent) => void;
 
   /** 在戳一戳时触发的 hook 函数 */
   onPoke?: (data: GroupMessageEvent) => void;
-}
-
-export interface QBotMessageInfo {
-  resolvedRawMessage: string;
 }

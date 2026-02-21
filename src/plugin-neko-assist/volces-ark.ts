@@ -22,6 +22,11 @@ export class VolcesArk implements AIClient {
           body: JSON.stringify({
             model: 'doubao-seed-1-8-251228',
             input: messages,
+            tools: [
+              {
+                type: 'web_search',
+              },
+            ],
             thinking: { type: 'disabled' },
             stream: false,
           }),
@@ -34,9 +39,14 @@ export class VolcesArk implements AIClient {
 
         const json: any = await res.json();
 
-        console.log('✅ chat 接口请求成功\n', json);
+        console.log('✅ chat 接口请求成功');
+        console.dir(json, { depth: null });
 
-        return [true, json.output[0].content[0].text];
+        // output 里可能有 web_search_call 和 message 两类信息
+        const message = json.output.find(item => item.type === 'message');
+        // const webSearch = json.output.find(item => item.type === 'web_search_call');
+
+        return [true, message.content[0].text];
       } catch (e) {
         console.error(e);
         return [false, e.toString()];

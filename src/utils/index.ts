@@ -88,3 +88,5 @@ export const replaceAllAsync = async (
     return result;
   });
 };
+
+export * from './worker.ts';

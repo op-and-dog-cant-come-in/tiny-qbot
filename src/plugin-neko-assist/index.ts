@@ -3,8 +3,8 @@ import fs from 'fs-extra';
 import { jsonrepair } from 'jsonrepair';
 import dayjs from 'dayjs';
 import { type AIClient, type AIMessageItem } from '../ai-client.ts';
-import { type QBotPlugin, type QBot, type QBotMessageInfo } from '../qbot.ts';
-import { debounce, replaceAllAsync, tryReadJson } from '../utils/index.ts';
+import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+import { debounce, tryReadJson } from '../utils/index.ts';
 import { VolcesArk } from './volces-ark.ts';
 
 export interface NekoAssistInitOptions {
@@ -40,15 +40,14 @@ export class NekoAssist implements QBotPlugin {
     ]);
   };
 
-  onGroupMessage = async (data: GroupMessageEvent, info: QBotMessageInfo) => {
+  onGroupMessage = async (data: GroupMessageEvent) => {
     // TODO: 匹配一些调试指令
+    const message = data.raw_message;
 
     // 在消息 @ 了当前账号时进行 llm 回复，at 操作可以在消息任意位置
     // 如果包含若干猫猫感兴趣的关键词，也会触发 llm 回复
-    const message = info.resolvedRawMessage;
-
     if (data.raw_message.includes(`[CQ:at,qq=${this.qbot.account}]`) || message.includes('猫')) {
-      await this.reply(data.group_id, data.user_id, info.resolvedRawMessage);
+      await this.reply(data.group_id, data.user_id, message);
     }
   };
 
@@ -62,6 +61,13 @@ export class NekoAssist implements QBotPlugin {
     const { naplink } = qbot;
     const currentTime = dayjs().format('YYYY-MM-DD HH:mm');
 
+    const recentHistory = (await qbot.getRecentHistory(15))
+      .map(item => {
+        // 注意数据库中的时间戳单位为秒，需转化为毫秒给 dayjs 使用
+        return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
+      })
+      .join('\n');
+
     // 拼接提示词
     const messageList: AIMessageItem[] = [
       {
@@ -69,13 +75,14 @@ export class NekoAssist implements QBotPlugin {
         content: this.systemPrompts
           .replace('<%= ACCOUNT %>', qbot.account)
           .replace('<%= MEMORY %>', JSON.stringify(this.memory))
-          .replace('<%= HISTORY %>', qbot.history.slice(-15).join('\n'))
+          .replace('<%= HISTORY %>', recentHistory)
           .replace('<%= CURRENT_TIME %>', currentTime),
       },
       { role: 'user', content: message },
     ];
 
-    console.log('*️⃣ NekoAssit 提示词生成完毕\n', messageList);
+    console.log('*️⃣ NekoAssit 提示词生成完毕');
+    console.log(messageList);
 
     // 调用 ai 接口
     const [success, res] = await this.aiClient.chat(messageList);
@@ -89,7 +96,8 @@ export class NekoAssist implements QBotPlugin {
       // 将回复解析为 JSON 数据
       const json = JSON.parse(jsonrepair(res));
 
-      console.log('✅ NekoAssist chat 接口 JSON 指令解析完毕\n', json);
+      console.log('✅ NekoAssist chat 接口 JSON 指令解析完毕');
+      console.dir(json, { depth: null });
 
       // 如果 action 为 silent，则不进行任何操作
       if (json.action === 'silent') {
@@ -126,12 +134,13 @@ export class NekoAssist implements QBotPlugin {
         reply = reply.replace(/\p{Emoji}/gu, '');
 
         // napcat 不会捕获自己发送的消息事件，发送消息后要把自己的消息添加到 history 中
-        await naplink.sendGroupMessage(groupId, reply);
-        qbot.history.push(`${currentTime} ${qbot.account}: ${reply}`);
-        qbot.saveHistory();
+        const { message_id } = await naplink.sendGroupMessage(groupId, reply);
+        const msg = await naplink.getMessage(message_id);
+        await qbot.addHistory(msg.message_id, msg.user_id, msg.raw_message, msg.time);
       }
     } catch (e) {
-      await naplink.sendGroupMessage(groupId, `解析回复为 JSON 数据失败了喵\n${e}`);
+      console.log('❌ in NekoAssist.reply():', e);
+      await naplink.sendGroupMessage(groupId, `程序出错了喵\n${e.toString()}`);
     }
   }
 }
