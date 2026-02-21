@@ -22,11 +22,11 @@ export class VolcesArk implements AIClient {
           body: JSON.stringify({
             model: 'doubao-seed-1-8-251228',
             input: messages,
-            tools: [
-              {
-                type: 'web_search',
-              },
-            ],
+            // tools: [
+            //   {
+            //     type: 'web_search',
+            //   },
+            // ],
             thinking: { type: 'disabled' },
             stream: false,
           }),
