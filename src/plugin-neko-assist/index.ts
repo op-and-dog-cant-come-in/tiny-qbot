@@ -106,7 +106,7 @@ export class NekoAssist implements QBotPlugin {
 
       if (json.action === 'reply') {
         const { memory, at } = json;
-        let reply = json.reply;
+        let reply = json.reply || '';
 
         // 添加 at 操作
         if (at && at !== String(userId)) {
@@ -128,6 +128,8 @@ export class NekoAssist implements QBotPlugin {
               delete this.memory[key];
             }
           }
+
+          this.saveMemory();
         }
 
         // 过滤掉 emoji 字符

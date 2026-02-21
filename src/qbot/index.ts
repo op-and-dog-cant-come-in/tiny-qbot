@@ -66,7 +66,7 @@ export class QBot {
         name = name.slice(1);
       }
 
-      const handler = this.command.data.get(name);
+      const handler = this.command.data.get(name.toLowerCase());
 
       if (handler) {
         handler(args);
