@@ -1,4 +1,3 @@
-import { type GroupMessageEvent } from '@naplink/naplink';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
 
 export class HajimiMusic implements QBotPlugin {
@@ -7,14 +6,13 @@ export class HajimiMusic implements QBotPlugin {
 
   install = async (qbot: QBot) => {
     this.qbot = qbot;
-  };
 
-  onGroupMessage = async (data: GroupMessageEvent) => {
-    const message = data.raw_message;
-
-    if (message.includes('/哈基米')) {
-      await this.sendHajimiMusic(data.group_id);
-    }
+    qbot.command.register({
+      name: '哈基米',
+      alias: ['hajimi', '哈吉米'],
+      description: '发送一段随机的哈吉米音乐，该指令没有参数',
+      handler: () => this.sendHajimiMusic(this.qbot.targetGroup),
+    });
   };
 
   async sendHajimiMusic(groupId: number | string) {

@@ -137,6 +137,11 @@ export class NekoAssist implements QBotPlugin {
         const { message_id } = await naplink.sendGroupMessage(groupId, reply);
         const msg = await naplink.getMessage(message_id);
         await qbot.addHistory(msg.message_id, msg.user_id, msg.raw_message, msg.time);
+
+        // 检查是否需要执行指令
+        if (json.command) {
+          qbot.command.invoke(json.command);
+        }
       }
     } catch (e) {
       console.log('❌ in NekoAssist.reply():', e);

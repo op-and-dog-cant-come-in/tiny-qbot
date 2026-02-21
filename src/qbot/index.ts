@@ -5,14 +5,10 @@ import fs from 'fs-extra';
 import NapLink, { type GroupMessageEvent } from '@naplink/naplink';
 import getPort from 'get-port';
 import { execa } from 'execa';
-import { debounce, replaceAllAsync, tryReadJson, WorkerScheduler } from '../utils/index.ts';
-import dayjs from 'dayjs';
+import { WorkerScheduler } from '../utils/index.ts';
 import type { AddHistoryParams, GetRecentHistoryParams, MessageRecord } from './types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** 保存消息记录的文件路径 */
-const HISTORY_PATH = 'history.json';
 
 export class QBot {
   /** 机器人登录的 QQ 账号 */
@@ -39,6 +35,47 @@ export class QBot {
     this.plugins = options.plugins;
     this.db = new WorkerScheduler(path.join(__dirname, 'database.worker.ts'), { groupId: this.targetGroup });
   }
+
+  /** 指令相关逻辑 */
+  command = {
+    /** 当前已注册的指令 */
+    data: new Map<string, (params: string) => any>(),
+    /** 注册一条指令，该操作无法撤销 */
+    register: (params: CommandParams) => {
+      const { data } = this.command;
+
+      if (data.has(params.name)) {
+        throw new Error(`指令 ${params.name} 已注册`);
+      }
+
+      for (const item of params.alias || []) {
+        if (data.has(item)) {
+          throw new Error(`指令别名 ${item} 已注册`);
+        }
+      }
+
+      for (const item of [params.name, ...(params.alias || [])]) {
+        data.set(item, params.handler);
+      }
+    },
+    /** 执行一条指令，存在该指令时返回 true，否则返回 false */
+    invoke: (command: string) => {
+      let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
+
+      if (name.startsWith('/')) {
+        name = name.slice(1);
+      }
+
+      const handler = this.command.data.get(name);
+
+      if (handler) {
+        handler(args);
+        return true;
+      }
+
+      return false;
+    },
+  };
 
   async setup() {
     // 初始化插件
@@ -89,18 +126,16 @@ export class QBot {
 
     // naplink 事件统一由 qbot 监听，触发对应的插件监听器函数
     // 插件通常不应独立监听 naplink 事件
-    client.on('message.group', async (data: GroupMessageEvent) => {
-      console.log('✍️ 收到群组消息');
-      console.dir(data, { depth: null });
-
+    client.on('message.group', (data: GroupMessageEvent) => {
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
 
-      // 记录消息结果
-      await this.addHistory(String(data.message_id), String(data.user_id), data.raw_message, data.time);
+      console.log('✍️ 收到群组消息');
+      console.dir(data, { depth: null });
 
-      for (const item of this.plugins) {
-        item.onGroupMessage?.(data);
+      // 指令没匹配成功时触发消息回调
+      if (!this.command.invoke(data.raw_message)) {
+        this.invokeGroupMessage(data);
       }
     });
 
@@ -124,6 +159,17 @@ export class QBot {
     await client.connect();
     await client.sendGroupMessage(this.targetGroup, '猫猫上线了喵');
     console.log(`🚀 ${styleText('green', 'QBot 启动完毕')}`);
+  }
+
+  /** 触发指定群消息的后续处理操作 */
+  async invokeGroupMessage(data: GroupMessageEvent) {
+    // 记录历史消息
+    await this.addHistory(String(data.message_id), String(data.user_id), data.raw_message, data.time);
+
+    // 触发 onGroupMessage 回调
+    for (const item of this.plugins) {
+      item.onGroupMessage?.(data);
+    }
   }
 
   /** 向数据库添加一条消息记录 */
@@ -178,4 +224,18 @@ export interface QBotPlugin {
 
   /** 在戳一戳时触发的 hook 函数 */
   onPoke?: (data: GroupMessageEvent) => void;
+}
+
+export interface CommandParams {
+  /** 指令名称 */
+  name: string;
+
+  /** 指令别名 */
+  alias?: string[];
+
+  /** 指令描述 */
+  description: string;
+
+  /** 指令执行函数 */
+  handler: (params: string) => void;
 }
