@@ -199,14 +199,14 @@ export class AITTS implements QBotPlugin {
     qbot.command.register({
       name: 'tts',
       alias: ['语音'],
-      description: '/tts <speaker> <文本内容> 将文本转换为AI语音发送，speaker可选',
+      description: '/tts <音源> <文本内容> 将文本转换为AI语音发送，音源可选',
       handler: (args: string) => this.sendAIVoice(this.qbot.targetGroup, args),
     });
 
     qbot.command.register({
       name: 'tts-speaker',
       alias: ['tts-speakers'],
-      description: '/tts-speaker 获取可用的语音角色列表',
+      description: '/tts-speaker 获取可用的音源列表',
       handler: () => this.sendSpeakerList(this.qbot.targetGroup),
     });
   };

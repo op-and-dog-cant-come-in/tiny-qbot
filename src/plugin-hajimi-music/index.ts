@@ -10,7 +10,7 @@ export class HajimiMusic implements QBotPlugin {
     qbot.command.register({
       name: '哈基米',
       alias: ['hajimi', '哈吉米'],
-      description: '发送一段随机的哈吉米音乐，该指令没有参数',
+      description: '/哈基米 发送一段随机的哈吉米音乐，该指令没有参数',
       handler: () => this.sendHajimiMusic(this.qbot.targetGroup),
     });
   };

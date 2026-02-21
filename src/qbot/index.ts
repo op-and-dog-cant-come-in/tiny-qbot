@@ -39,24 +39,28 @@ export class QBot {
   /** 指令相关逻辑 */
   command = {
     /** 当前已注册的指令 */
-    data: new Map<string, (params: string) => any>(),
+    handlerMap: new Map<string, (params: string) => any>(),
+    /** 当前已注册的指令元信息 */
+    metaMap: new Map<string, CommandParams>(),
     /** 注册一条指令，该操作无法撤销 */
     register: (params: CommandParams) => {
-      const { data } = this.command;
+      const { handlerMap, metaMap } = this.command;
 
-      if (data.has(params.name)) {
+      if (handlerMap.has(params.name)) {
         throw new Error(`指令 ${params.name} 已注册`);
       }
 
       for (const item of params.alias || []) {
-        if (data.has(item)) {
+        if (handlerMap.has(item)) {
           throw new Error(`指令别名 ${item} 已注册`);
         }
       }
 
       for (const item of [params.name, ...(params.alias || [])]) {
-        data.set(item, params.handler);
+        handlerMap.set(item, params.handler);
       }
+
+      metaMap.set(params.name, params);
     },
     /** 执行一条指令，存在该指令时返回 true，否则返回 false */
     invoke: (command: string) => {
@@ -66,7 +70,7 @@ export class QBot {
         name = name.slice(1);
       }
 
-      const handler = this.command.data.get(name.toLowerCase());
+      const handler = this.command.handlerMap.get(name.toLowerCase());
 
       if (handler) {
         handler(args);
