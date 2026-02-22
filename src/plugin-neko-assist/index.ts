@@ -100,111 +100,110 @@ export class NekoAssist implements QBotPlugin {
       this.isReplying = true;
       this.replyingUserId = userId;
 
-      const currentTime = dayjs().format('YYYY-MM-DD HH:mm');
+      const messageList: AIMessageItem[] = [{ role: 'user', content: message }];
 
-      const recentHistory = (await qbot.getRecentHistory(15))
-        .map(item => {
-          return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
-        })
-        .join('\n');
+      let continueLoop = true;
 
-      const commandsDescription = Array.from(qbot.command.metaMap.values())
-        .map(cmd => cmd.description)
-        .join('\n');
+      // 开始 agent 循环，在 llm 返回的 continue 字段为 true 时循环调用对话接口
+      while (continueLoop) {
+        let json: any;
+        let llmRes = '';
 
-      const messageList: AIMessageItem[] = [
-        {
-          role: 'system',
-          content: this.systemPrompts
-            .replace('<%= ACCOUNT %>', qbot.account)
-            .replace('<%= COMMANDS %>', commandsDescription)
-            .replace('<%= MEMORY %>', JSON.stringify(this.memory))
-            .replace('<%= HISTORY %>', recentHistory)
-            .replace('<%= CURRENT_TIME %>', currentTime),
-        },
-        { role: 'user', content: message },
-      ];
+        const systemPrompts = await this.generateSystemPrompt();
+        const list: AIMessageItem[] = [{ role: 'system', content: systemPrompts }, ...messageList];
 
-      console.log('*️⃣ NekoAssit 提示词生成完毕');
-      console.log(messageList);
+        console.log('*️⃣ NekoAssit 提示词生成完毕');
+        console.log(messageList);
 
-      // 调用 ai 接口，如果 json 解析失败了，则重试一次，再失败则报错
-      let json: any;
+        // 调用 ai 接口，如果 json 解析失败了，则重试一次，再失败则报错
+        for (let i = 0; i < 2; ++i) {
+          const [success, res] = await this.aiClient.chat(list);
 
-      for (let i = 0; i < 2; ++i) {
-        const [success, res] = await this.aiClient.chat(messageList);
-
-        if (!success) {
-          await qbot.sendGroupMessage(`接口请求失败了喵\n${res}`);
-          return;
-        }
-
-        // 将回复解析为 JSON 数据
-        try {
-          json = JSON.parse(jsonrepair(res));
-          break;
-        } catch (e) {
-          json = null;
-          console.log('❌ NekoAssist chat 接口 JSON 指令解析失败了喵');
-          console.dir(res, { depth: null });
-          continue;
-        }
-      }
-
-      if (!json) {
-        throw new Error('大模型返回的 JSON 数据格式错误喵');
-      }
-
-      console.log('✅ NekoAssist chat 接口 JSON 指令解析完毕');
-      console.dir(json, { depth: null });
-
-      // 如果 action 为 silent，则不进行任何操作
-      if (json.action === 'silent') {
-        return;
-      }
-
-      if (json.action === 'reply') {
-        const { memory, at } = json;
-        let reply = json.reply || '';
-
-        // 添加 at 操作
-        if (at && at !== String(userId)) {
-          reply = `[CQ:at,qq=${at}] ${reply}`;
-        }
-
-        // 更新长期记忆
-        if (memory) {
-          const { remember, delete: delKeys } = memory;
-
-          if (Array.isArray(remember)) {
-            for (const [key, value] of remember) {
-              this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
-            }
+          if (!success) {
+            await qbot.sendGroupMessage(`接口请求失败了喵\n${res}`);
+            return;
           }
 
-          if (Array.isArray(delKeys)) {
-            for (const key of delKeys) {
-              delete this.memory[key];
-            }
+          // 将回复解析为 JSON 数据
+          try {
+            llmRes = jsonrepair(res);
+            json = JSON.parse(llmRes);
+            break;
+          } catch (e) {
+            json = null;
+            console.log('❌ NekoAssist chat 接口 JSON 指令解析失败了喵');
+            console.dir(res, { depth: null });
+            continue;
+          }
+        }
+
+        if (!json) {
+          throw new Error('大模型返回的 JSON 数据格式错误喵');
+        }
+
+        console.log('✅ NekoAssist chat 接口 JSON 指令解析完毕');
+        console.dir(json, { depth: null });
+
+        // 如果 action 为 silent，则不进行任何操作
+        // 为 reply 时生成回复消息
+        if (json.action === 'reply') {
+          const { memory, at } = json;
+          let reply = json.reply || '';
+
+          // 添加 at 操作
+          if (at && at !== String(userId)) {
+            reply = `[CQ:at,qq=${at}] ${reply}`;
           }
 
-          this.saveMemory();
+          // 更新长期记忆
+          if (memory) {
+            const { remember, delete: delKeys } = memory;
+
+            if (Array.isArray(remember)) {
+              for (const [key, value] of remember) {
+                this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
+              }
+            }
+
+            if (Array.isArray(delKeys)) {
+              for (const key of delKeys) {
+                delete this.memory[key];
+              }
+            }
+
+            this.saveMemory();
+          }
+
+          // 过滤掉 emoji 字符
+          reply = reply.replace(/\p{Emoji}/gu, '');
+
+          // 如果当前最新消息不是提问消息，则添加 reply
+          if (qbot.latestMessageId !== messageId) {
+            reply = `[CQ:reply,id=${messageId}] ${reply}`;
+          }
+
+          await qbot.sendGroupMessage(reply);
+          messageList.push({ role: 'assistant', content: llmRes });
+
+          // 检查是否需要执行指令
+          if (json.command) {
+            for (const item of Array.isArray(json.command) ? json.command : [json.command]) {
+              await qbot.command.invoke(item);
+            }
+          }
+        }
+        // 为 command-background 时，执行后台指令
+        else if (json.action === 'command-background') {
+          let commandRes = '[系统操作]\n\n';
+
+          for (const item of Array.isArray(json.command) ? json.command : [json.command]) {
+            commandRes += `指令 ${item} 的执行结果：\n${await qbot.command.invokeForLLM(item)}\n\n`;
+          }
+
+          messageList.push({ role: 'user', content: commandRes });
         }
 
-        // 过滤掉 emoji 字符
-        reply = reply.replace(/\p{Emoji}/gu, '');
-
-        // 如果当前最新消息不是提问消息，则添加 reply
-        if (qbot.latestMessageId !== messageId) {
-          reply = `[CQ:reply,id=${messageId}] ${reply}`;
-        }
-
-        await qbot.sendGroupMessage(reply);
-
-        // 检查是否需要执行指令
-        if (json.command) {
-          qbot.command.invoke(json.command);
-        }
+        continueLoop = json.continue;
       }
     } catch (e) {
       console.log('❌ in NekoAssist.reply():', e);
@@ -219,6 +218,29 @@ export class NekoAssist implements QBotPlugin {
       const item = this.replyQueue.shift()!;
       this.reply(item.userId, item.message, item.messageId, item.priority);
     }
+  }
+
+  /** 生成系统提示词 */
+  async generateSystemPrompt() {
+    const { qbot } = this;
+    const currentTime = dayjs().format('YYYY-MM-DD HH:mm');
+
+    const recentHistory = (await qbot.getRecentHistory(15))
+      .map(item => {
+        return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
+      })
+      .join('\n');
+
+    const commandsDescription = Array.from(qbot.command.metaMap.values())
+      .map(cmd => cmd.description)
+      .join('\n');
+
+    return this.systemPrompts
+      .replace('<%= ACCOUNT %>', qbot.account)
+      .replace('<%= COMMANDS %>', commandsDescription)
+      .replace('<%= MEMORY %>', JSON.stringify(this.memory))
+      .replace('<%= HISTORY %>', recentHistory)
+      .replace('<%= CURRENT_TIME %>', currentTime);
   }
 
   /** 向 this.replyQueue 中添加一条新消息 */

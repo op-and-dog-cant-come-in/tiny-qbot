@@ -19,6 +19,7 @@ export class ImageRecognize implements QBotPlugin {
       // alias: ['image', 'img'],
       description: '/识图 <图片> 使用AI识别图片内容，以文本形式描述',
       handler: (args: string) => this.recognizeImage(args),
+      handlerForLLM: (args: string) => this.recognizeImageForLLM(args),
     });
   };
 
@@ -77,6 +78,39 @@ export class ImageRecognize implements QBotPlugin {
       console.log('❌ ImageRecognize 识图失败:');
       console.log(e);
       await this.qbot.sendGroupMessage(`识图失败了喵\n${e?.message || '未知错误'}`);
+    }
+  }
+
+  async recognizeImageForLLM(args: string): Promise<string> {
+    let imageUrl = this.extractImageUrl(args);
+
+    if (!imageUrl) {
+      const [prevMsg] = await this.qbot.getRecentHistory(1);
+      imageUrl = this.extractImageUrl(prevMsg?.raw_message || '');
+
+      if (!imageUrl) {
+        return '没找到图片数据喵，请在指令消息或指令消息的上一条消息中提供图片喵';
+      }
+    }
+
+    try {
+      const res = await fetch('https://api.milorapart.top/apis/airecognizeimg', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file: imageUrl }),
+      });
+
+      const data = (await res.json()) as ImageRecognizeResponse;
+
+      if (!data || data.code !== 200 || !data.result) {
+        return `识图失败: ${data?.msg || '未知错误'}`;
+      }
+
+      return `识图结果: ${data.result}`;
+    } catch (e) {
+      return `识图失败: ${e?.message || '未知错误'}`;
     }
   }
 }

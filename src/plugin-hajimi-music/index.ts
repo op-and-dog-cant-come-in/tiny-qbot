@@ -12,6 +12,7 @@ export class HajimiMusic implements QBotPlugin {
       alias: ['hajimi', '哈吉米'],
       description: '/哈基米 发送一段随机的哈吉米音乐，该指令没有参数',
       handler: () => this.sendHajimiMusic(),
+      handlerForLLM: () => this.sendHajimiMusicForLLM(),
     });
   };
 
@@ -33,6 +34,21 @@ export class HajimiMusic implements QBotPlugin {
     } catch (e) {
       console.log('❌ HajimiMusic 发送失败:');
       console.log(e);
+    }
+  }
+
+  async sendHajimiMusicForLLM(): Promise<string> {
+    try {
+      const res = await fetch('http://api.ocoa.cn/api/hjm.php');
+      const data = (await res.json()) as any;
+
+      if (!data || !data.url) {
+        return '获取哈基米音乐失败';
+      }
+
+      return `[CQ:record,file=${data.url}]`;
+    } catch (e) {
+      return `发送哈基米音乐失败: ${e?.message || '未知错误'}`;
     }
   }
 }

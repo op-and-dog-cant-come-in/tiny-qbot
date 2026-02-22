@@ -201,6 +201,7 @@ export class AITTS implements QBotPlugin {
       alias: ['语音'],
       description: '/tts <音源> <文本内容> 将文本转换为AI语音发送，音源参数可省略，猫猫默认不传递音源参数',
       handler: (args: string) => this.sendAIVoice(args),
+      handlerForLLM: (args: string) => this.sendAIVoiceForLLM(args),
     });
 
     qbot.command.register({
@@ -208,6 +209,7 @@ export class AITTS implements QBotPlugin {
       alias: ['tts-speakers'],
       description: '/tts-speaker 获取可用的音源列表',
       handler: () => this.sendSpeakerList(),
+      handlerForLLM: () => this.getSpeakerListForLLM(),
     });
   };
 
@@ -215,6 +217,10 @@ export class AITTS implements QBotPlugin {
     const listText = `可用的语音角色列表(${SPEAKERS.length}个)：\n${SPEAKERS.join('、')}`;
     await this.qbot.sendGroupMessage(listText);
     console.log('✅ AITTS 发送角色列表成功');
+  }
+
+  async getSpeakerListForLLM(): Promise<string> {
+    return SPEAKERS.join(',');
   }
 
   async sendAIVoice(args: string) {
@@ -254,6 +260,37 @@ export class AITTS implements QBotPlugin {
       console.log('❌ AITTS 发送失败:');
       console.log(e);
       await this.qbot.sendGroupMessage(`语音生成失败了喵\n${e?.message || '未知错误'}`);
+    }
+  }
+
+  async sendAIVoiceForLLM(args: string): Promise<string> {
+    args = args.trim();
+
+    if (!args) {
+      return '文本内容为空，无法生成语音';
+    }
+
+    const parts = args.split(/\s+/);
+    let speaker = DEFAULT_SPEAKER;
+    let text = args;
+
+    if (parts.length >= 2 && SPEAKERS.includes(parts[0])) {
+      speaker = parts[0];
+      text = parts.slice(1).join('');
+    }
+
+    try {
+      const url = `https://api.milorapart.top/apis/AIvoice/?text=${encodeURIComponent(text)}&speaker=${encodeURIComponent(speaker)}`;
+      const res = await fetch(url);
+      const data = (await res.json()) as any;
+
+      if (!data || data.code !== 200 || !data.url) {
+        return `语音生成失败: ${data?.msg || '未知错误'}`;
+      }
+
+      return `[CQ:record,file=${data.url}]`;
+    } catch (e) {
+      return `语音生成失败: ${e?.message || '未知错误'}`;
     }
   }
 }

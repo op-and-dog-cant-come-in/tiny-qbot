@@ -26,6 +26,7 @@ export class EpicFree implements QBotPlugin {
       alias: ['喜加一'],
       description: '/epic-free 查询当前 Epic 免费游戏，该指令没有参数',
       handler: () => this.sendEpicFreeGames(),
+      handlerForLLM: () => this.getEpicFreeGamesForLLM(),
     });
   };
 
@@ -58,6 +59,30 @@ export class EpicFree implements QBotPlugin {
       await this.qbot.sendGroupMessage('EpicFree 发送免费游戏信息失败了喵\n' + e.message);
       console.log('❌ EpicFree 发送失败:');
       console.log(e);
+    }
+  }
+
+  async getEpicFreeGamesForLLM(): Promise<string> {
+    try {
+      const res = await fetch('https://api.milorapart.top/apis/free');
+      const data = (await res.json()) as EpicFreeResponse;
+
+      if (!data || data.code !== 200 || !data.data || data.data.length === 0) {
+        return `Epic 免费游戏查询失败: ${data?.msg || '未知错误'}`;
+      }
+
+      let message = `${data.msg}\n\n`;
+
+      for (const game of data.data) {
+        message += `${game.name}\n`;
+        message += `原价: ${game.original_price}\n`;
+        message += `截止: ${game.end_time}\n`;
+        message += `介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
+      }
+
+      return `Epic 免费游戏信息:\n${message.trim()}`;
+    } catch (e) {
+      return `查询 Epic 免费游戏失败: ${e?.message || '未知错误'}`;
     }
   }
 }

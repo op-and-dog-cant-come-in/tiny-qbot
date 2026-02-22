@@ -41,13 +41,18 @@ export class QBot {
 
   /** 指令相关逻辑 */
   command = {
-    /** 当前已注册的指令 */
+    /** 当前已注册的指令执行函数 */
     handlerMap: new Map<string, (params: string) => any>(),
+
+    /** 给 ai 使用的指令执行函数 */
+    handlerForLLMMap: new Map<string, (params: string) => Promise<string>>(),
+
     /** 当前已注册的指令元信息 */
     metaMap: new Map<string, CommandParams>(),
+
     /** 注册一条指令，该操作无法撤销 */
     register: (params: CommandParams) => {
-      const { handlerMap, metaMap } = this.command;
+      const { handlerMap, handlerForLLMMap, metaMap } = this.command;
 
       if (handlerMap.has(params.name)) {
         throw new Error(`指令 ${params.name} 已注册`);
@@ -59,14 +64,23 @@ export class QBot {
         }
       }
 
-      for (const item of [params.name, ...(params.alias || [])]) {
+      handlerMap.set(params.name, params.handler);
+
+      for (const item of params.alias || []) {
         handlerMap.set(item, params.handler);
+      }
+
+      handlerForLLMMap.set(params.name, params.handlerForLLM);
+
+      for (const item of params.alias || []) {
+        handlerForLLMMap.set(item, params.handlerForLLM);
       }
 
       metaMap.set(params.name, params);
     },
+
     /** 执行一条指令，存在该指令时返回 true，否则返回 false */
-    invoke: (command: string) => {
+    invoke: async (command: string) => {
       let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
 
       if (name.startsWith('/')) {
@@ -76,11 +90,26 @@ export class QBot {
       const handler = this.command.handlerMap.get(name.toLowerCase());
 
       if (handler) {
-        handler(args);
+        await handler(args);
         return true;
       }
 
       return false;
+    },
+
+    /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
+    invokeForLLM: async (command: string) => {
+      let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
+
+      if (name.startsWith('/')) {
+        name = name.slice(1);
+      }
+
+      const handler = this.command.handlerForLLMMap.get(name.toLowerCase());
+
+      if (!handler) return '没有找到匹配的指令喵';
+
+      return await handler(args);
     },
   };
 
@@ -257,4 +286,7 @@ export interface CommandParams {
 
   /** 指令执行函数 */
   handler: (params: string) => void;
+
+  /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
+  handlerForLLM?: (params: string) => Promise<string>;
 }
