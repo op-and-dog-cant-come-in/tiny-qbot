@@ -29,6 +29,9 @@ export class QBot {
   /** 保存消息记录等内容的数据库 worker 句柄 */
   db: WorkerScheduler;
 
+  /** 记录最新一条群消息的 id */
+  latestMessageId = 0;
+
   constructor(options: QBotInitOptions) {
     this.account = options.account;
     this.targetGroup = options.group;
@@ -130,17 +133,19 @@ export class QBot {
 
     // naplink 事件统一由 qbot 监听，触发对应的插件监听器函数
     // 插件通常不应独立监听 naplink 事件
-    client.on('message.group', (data: GroupMessageEvent) => {
+    client.on('message.group', async (data: GroupMessageEvent) => {
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
 
       console.log('✍️ 收到群组消息');
       console.dir(data, { depth: null });
 
-      // 指令没匹配成功时触发消息回调
-      if (!this.command.invoke(data.raw_message)) {
-        this.invokeGroupMessage(data);
-      }
+      this.latestMessageId = Number(data.message_id);
+
+      // 如果当前消息是指令调用的话，则不触发 onGroupMessage 回调
+      if (await this.command.invoke(data.raw_message)) return;
+
+      this.invokeGroupMessage(data);
     });
 
     client.on('notice.notify.poke', async (data: GroupMessageEvent) => {
@@ -200,6 +205,16 @@ export class QBot {
     const result = await this.db.runTask(params);
 
     return (result as any).result;
+  }
+
+  /** 向目标群组发送消息，并更新消息记录。返回发送的消息 id */
+  async sendGroupMessage(raw_message: string) {
+    const { message_id } = await this.naplink.sendGroupMessage(this.targetGroup, raw_message);
+    const msg = await this.naplink.getMessage(message_id);
+
+    await this.addHistory(msg.message_id, msg.user_id, msg.raw_message, msg.time);
+
+    return message_id;
   }
 }
 

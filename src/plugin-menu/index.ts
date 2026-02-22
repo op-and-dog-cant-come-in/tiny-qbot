@@ -11,16 +11,15 @@ export class Menu implements QBotPlugin {
       name: '菜单',
       alias: ['menu', 'help', '帮助'],
       description: '/菜单 获取当前可用的所有指令列表',
-      handler: () => this.sendMenu(this.qbot.targetGroup),
+      handler: () => this.sendMenu(),
     });
   };
 
-  async sendMenu(groupId: number | string) {
-    const { naplink, command } = this.qbot;
-    const commands = Array.from(command.metaMap.values());
+  async sendMenu() {
+    const commands = Array.from(this.qbot.command.metaMap.values());
 
     if (commands.length === 0) {
-      await naplink.sendGroupMessage(groupId, '当前没有可用的指令喵');
+      await this.qbot.sendGroupMessage('当前没有可用的指令喵');
       return;
     }
 
@@ -32,7 +31,7 @@ export class Menu implements QBotPlugin {
       message += `${cmd.description}\n\n`;
     }
 
-    await naplink.sendGroupMessage(groupId, message.trim());
+    await this.qbot.sendGroupMessage(message.trim());
     console.log('✅ Menu 发送菜单成功');
   }
 }

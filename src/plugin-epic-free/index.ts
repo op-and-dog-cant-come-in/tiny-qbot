@@ -25,19 +25,17 @@ export class EpicFree implements QBotPlugin {
       name: 'epic-free',
       alias: ['喜加一'],
       description: '/epic-free 查询当前 Epic 免费游戏，该指令没有参数',
-      handler: () => this.sendEpicFreeGames(this.qbot.targetGroup),
+      handler: () => this.sendEpicFreeGames(),
     });
   };
 
-  async sendEpicFreeGames(groupId: number | string) {
-    const { naplink } = this.qbot;
-
+  async sendEpicFreeGames() {
     try {
       const res = await fetch('https://api.milorapart.top/apis/free');
       const data = (await res.json()) as EpicFreeResponse;
 
       if (!data || data.code !== 200 || !data.data || data.data.length === 0) {
-        await naplink.sendGroupMessage(groupId, 'EpicFree 接口请求失败了喵\n' + JSON.stringify(data, null, 2));
+        await this.qbot.sendGroupMessage('EpicFree 接口请求失败了喵\n' + JSON.stringify(data, null, 2));
         console.log('❌ EpicFree 获取免费游戏失败');
         console.log(res);
         console.log(data);
@@ -53,11 +51,11 @@ export class EpicFree implements QBotPlugin {
         message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
       }
 
-      await naplink.sendGroupMessage(groupId, message.trim());
+      await this.qbot.sendGroupMessage(message.trim());
       console.log('✅ EpicFree 发送免费游戏信息成功');
       console.log(data);
     } catch (e) {
-      await naplink.sendGroupMessage(groupId, 'EpicFree 发送免费游戏信息失败了喵\n' + e.message);
+      await this.qbot.sendGroupMessage('EpicFree 发送免费游戏信息失败了喵\n' + e.message);
       console.log('❌ EpicFree 发送失败:');
       console.log(e);
     }

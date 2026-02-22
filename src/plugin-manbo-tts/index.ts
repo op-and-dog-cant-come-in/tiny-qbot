@@ -11,12 +11,11 @@ export class ManboTTS implements QBotPlugin {
       name: '曼波',
       alias: ['manbo'],
       description: '/曼波 <文本内容> 将文本转换为曼波语音发送',
-      handler: (args: string) => this.sendManboVoice(this.qbot.targetGroup, args),
+      handler: (args: string) => this.sendManboVoice(args),
     });
   };
 
-  async sendManboVoice(groupId: number | string, text: string) {
-    const { naplink } = this.qbot;
+  async sendManboVoice(text: string) {
     text = text.trim();
 
     if (!text) {
@@ -36,7 +35,7 @@ export class ManboTTS implements QBotPlugin {
         return;
       }
 
-      await naplink.sendGroupMessage(groupId, `[CQ:record,file=${data.url}]`);
+      await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
       console.log('✅ ManboTTS 发送曼波语音成功');
       console.log(data);
     } catch (e) {

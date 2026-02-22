@@ -199,27 +199,25 @@ export class AITTS implements QBotPlugin {
     qbot.command.register({
       name: 'tts',
       alias: ['语音'],
-      description: '/tts <音源> <文本内容> 将文本转换为AI语音发送，音源可选',
-      handler: (args: string) => this.sendAIVoice(this.qbot.targetGroup, args),
+      description: '/tts <音源> <文本内容> 将文本转换为AI语音发送，音源参数可省略，猫猫默认不传递音源参数',
+      handler: (args: string) => this.sendAIVoice(args),
     });
 
     qbot.command.register({
       name: 'tts-speaker',
       alias: ['tts-speakers'],
       description: '/tts-speaker 获取可用的音源列表',
-      handler: () => this.sendSpeakerList(this.qbot.targetGroup),
+      handler: () => this.sendSpeakerList(),
     });
   };
 
-  async sendSpeakerList(groupId: number | string) {
-    const { naplink } = this.qbot;
+  async sendSpeakerList() {
     const listText = `可用的语音角色列表(${SPEAKERS.length}个)：\n${SPEAKERS.join('、')}`;
-    await naplink.sendGroupMessage(groupId, listText);
+    await this.qbot.sendGroupMessage(listText);
     console.log('✅ AITTS 发送角色列表成功');
   }
 
-  async sendAIVoice(groupId: number | string, args: string) {
-    const { naplink } = this.qbot;
+  async sendAIVoice(args: string) {
     args = args.trim();
 
     if (!args) {
@@ -242,20 +240,20 @@ export class AITTS implements QBotPlugin {
       const data = (await res.json()) as any;
 
       if (!data || data.code !== 200 || !data.url) {
-        await naplink.sendGroupMessage(groupId, `语音生成失败了喵\n${data?.msg || '未知错误'}`);
+        await this.qbot.sendGroupMessage(`语音生成失败了喵\n${data?.msg || '未知错误'}`);
         console.log('❌ AITTS 生成语音失败');
         console.log(res);
         console.log(data);
         return;
       }
 
-      await naplink.sendGroupMessage(groupId, `[CQ:record,file=${data.url}]`);
+      await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
       console.log(`✅ AITTS 发送AI语音成功 (speaker: ${speaker})`);
       console.log(data);
     } catch (e) {
       console.log('❌ AITTS 发送失败:');
       console.log(e);
-      await naplink.sendGroupMessage(groupId, `语音生成失败了喵\n${e?.message || '未知错误'}`);
+      await this.qbot.sendGroupMessage(`语音生成失败了喵\n${e?.message || '未知错误'}`);
     }
   }
 }
