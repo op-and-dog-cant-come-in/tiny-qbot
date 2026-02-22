@@ -178,7 +178,7 @@ export class NekoAssist implements QBotPlugin {
 
           if (Array.isArray(remember)) {
             for (const [key, value] of remember) {
-              this.memory[key] = value;
+              this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
             }
           }
 
