@@ -7,6 +7,7 @@ import getPort from 'get-port';
 import { execa } from 'execa';
 import { WorkerScheduler } from '../utils/index.ts';
 import type { AddHistoryParams, GetRecentHistoryParams, MessageRecord } from './types.ts';
+import type { SystemMessage } from './system-message.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,10 +43,10 @@ export class QBot {
   /** 指令相关逻辑 */
   command = {
     /** 当前已注册的指令执行函数 */
-    handlerMap: new Map<string, (params: string) => any>(),
+    handlerMap: new Map<string, (params: string, sender: number) => any>(),
 
     /** 给 ai 使用的指令执行函数 */
-    handlerForLLMMap: new Map<string, (params: string) => Promise<string>>(),
+    handlerForLLMMap: new Map<string, (params: string, sender: number) => Promise<string>>(),
 
     /** 当前已注册的指令元信息 */
     metaMap: new Map<string, CommandParams>(),
@@ -80,7 +81,10 @@ export class QBot {
     },
 
     /** 执行一条指令，存在该指令时返回 true，否则返回 false */
-    invoke: async (command: string) => {
+    invoke: async (command: string, sender: number) => {
+      // 有时 ai 会忘记填写 command 字段，这里做下容错
+      if (!command) return '指令为空';
+
       let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
 
       if (name.startsWith('/')) {
@@ -90,7 +94,7 @@ export class QBot {
       const handler = this.command.handlerMap.get(name.toLowerCase());
 
       if (handler) {
-        await handler(args);
+        await handler(args, sender);
         return true;
       }
 
@@ -98,7 +102,9 @@ export class QBot {
     },
 
     /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
-    invokeForLLM: async (command: string) => {
+    invokeForLLM: async (command: string, sender: number) => {
+      if (!command) return '指令为空';
+
       let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
 
       if (name.startsWith('/')) {
@@ -109,19 +115,11 @@ export class QBot {
 
       if (!handler) return '没有找到匹配的指令喵';
 
-      return await handler(args);
+      return await handler(args, sender);
     },
   };
 
   async setup() {
-    // 初始化插件
-    await Promise.all(
-      this.plugins.map(async item => {
-        await item.install?.(this);
-        console.log(`✅ 插件初始化完毕: ${styleText('green', item.name)}`);
-      })
-    );
-
     /** 获取一个空闲的端口用作 ws 连接 */
     const wsPort = (this.wsPort = await getPort());
 
@@ -172,7 +170,7 @@ export class QBot {
       this.latestMessageId = Number(data.message_id);
 
       // 如果当前消息是指令调用的话，则不触发 onGroupMessage 回调
-      if (await this.command.invoke(data.raw_message)) return;
+      if (await this.command.invoke(data.raw_message, Number(data.user_id))) return;
 
       this.invokeGroupMessage(data);
     });
@@ -196,17 +194,26 @@ export class QBot {
 
     await client.connect();
     await client.sendGroupMessage(this.targetGroup, '猫猫上线了喵');
+
+    // 初始化插件
+    await Promise.all(
+      this.plugins.map(async item => {
+        await item.install?.(this);
+        console.log(`✅ 插件初始化完毕: ${styleText('green', item.name)}`);
+      })
+    );
+
     console.log(`🚀 ${styleText('green', 'QBot 启动完毕')}`);
   }
 
   /** 触发指定群消息的后续处理操作 */
-  async invokeGroupMessage(data: GroupMessageEvent) {
+  async invokeGroupMessage(data: GroupMessageEvent | SystemMessage) {
     // 记录历史消息
     await this.addHistory(String(data.message_id), String(data.user_id), data.raw_message, data.time);
 
     // 触发 onGroupMessage 回调
     for (const item of this.plugins) {
-      item.onGroupMessage?.(data);
+      item.onGroupMessage?.(data as GroupMessageEvent);
     }
   }
 
@@ -224,7 +231,7 @@ export class QBot {
     await this.db.runTask(params);
   }
 
-  /** 获取最近的 n 条记录 */
+  /** 获取最近的 n 条记录，新发的消息在前 */
   async getRecentHistory(count: number): Promise<MessageRecord[]> {
     const params: GetRecentHistoryParams = {
       type: 'get-recent-history',
@@ -285,8 +292,8 @@ export interface CommandParams {
   description: string;
 
   /** 指令执行函数 */
-  handler: (params: string) => void;
+  handler: (params: string, sender: number) => void;
 
   /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
-  handlerForLLM?: (params: string) => Promise<string>;
+  handlerForLLM?: (params: string, sender: number) => Promise<string>;
 }
