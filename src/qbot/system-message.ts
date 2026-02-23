@@ -3,15 +3,11 @@
  * 仅包含 napcat 消息的部分必要字段，未来可根据需要继续补充
  */
 export class SystemMessage {
-  time = Date.now();
+  /** 注意 napcat 的时间戳是秒为单位的 unix 时间戳 */
+  time = Date.now() / 1000;
   message_id = 0;
   message_type = 'group';
-  sender = {
-    user_id: 0,
-    nickname: '系统操作',
-    card: '',
-    role: 'admin',
-  };
+  user_id: string | number;
   raw_message = '';
   message = [];
   group_id: number;
@@ -20,7 +16,13 @@ export class SystemMessage {
   constructor(options: SystemMessageInitOptions) {
     this.group_id = Number(options.group_id);
     this.raw_message = options.rawMessage;
-    this.sender.user_id = Number(options.account);
+    this.user_id = Number(options.account);
+    this.message.push({
+      type: 'text',
+      data: {
+        text: options.rawMessage,
+      },
+    });
   }
 }
 

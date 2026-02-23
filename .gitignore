@@ -2,6 +2,7 @@
 /docker-compose.yml
 /history.json
 /memory.json
+/corn.json
 /*.db
 /*.db-shm
 /*.db-wal

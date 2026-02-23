@@ -2,11 +2,13 @@ import { type GroupMessageEvent } from '@naplink/naplink';
 import fs from 'fs-extra';
 import { jsonrepair } from 'jsonrepair';
 import dayjs from 'dayjs';
+import schedule from 'node-schedule';
 import { type AIClient, type AIMessageItem } from '../ai-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
 import { debounce, tryReadJson } from '../utils/index.ts';
 import { VolcesArk } from './volces-ark.ts';
 import { ModelScope } from './model-scope.ts';
+import { SystemMessage } from '../qbot/system-message.ts';
 
 export interface NekoAssistInitOptions {
   apiKey: string;
@@ -24,6 +26,13 @@ export class NekoAssist implements QBotPlugin {
   saveMemory = debounce(async () => {
     await fs.writeJson('memory.json', this.memory, { spaces: 2 });
     console.log('✅ NekoAssist 长期记忆保存成功');
+  }, 60000);
+
+  /** 保存定时任务信息 */
+  cornTasks: Record<string, { type: 'at' | 'corn'; time: string; desc: string }> = {};
+  saveCornTasks = debounce(async () => {
+    await fs.writeJson('corn.json', this.cornTasks, { spaces: 2 });
+    console.log('✅ NekoAssist 定时任务保存成功');
   }, 60000);
 
   /** ai 对话接口 */
@@ -50,10 +59,20 @@ export class NekoAssist implements QBotPlugin {
 
   install = async (qbot: QBot) => {
     this.qbot = qbot;
-    [this.systemPrompts, this.memory] = await Promise.all([
+    [this.systemPrompts, this.memory, this.cornTasks] = await Promise.all([
       fs.readFile('system-prompts.md', 'utf-8'),
       tryReadJson('memory.json', {}),
+      tryReadJson('corn.json', {}),
     ]);
+
+    // 创建定时任务，注意过滤掉已经过期的任务
+    for (const [key, value] of Object.entries(this.cornTasks)) {
+      if (value.type === 'at' && dayjs().isAfter(dayjs(value.time, 'YYYY-MM-DD HH:mm'))) {
+        continue;
+      }
+
+      this.createCornTask(key, value.type, value.time, value.desc);
+    }
   };
 
   onGroupMessage = async (data: GroupMessageEvent) => {
@@ -70,9 +89,13 @@ export class NekoAssist implements QBotPlugin {
     } else if (message.includes('猫')) {
       await this.reply(data.user_id, message, messageId, 10);
     }
-    // 其他消息优先级最低
+    // 其他消息优先级最低，且保持 5s 后仍是最新消息时再处理
     else if (data.message.some(item => item.type === 'text' && item.data.text.trim())) {
-      await this.reply(data.user_id, message, messageId, 0);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      if (this.qbot.latestMessageId === messageId) {
+        await this.reply(data.user_id, message, messageId, 0);
+      }
     }
   };
 
@@ -109,11 +132,12 @@ export class NekoAssist implements QBotPlugin {
         let json: any;
         let llmRes = '';
 
-        const systemPrompts = await this.generateSystemPrompt();
+        // 如果是定时任务等系统消息（id 为 0），则不添加历史消息记录
+        const systemPrompts = await this.generateSystemPrompt(Number(messageId) !== 0);
         const list: AIMessageItem[] = [{ role: 'system', content: systemPrompts }, ...messageList];
 
         console.log('*️⃣ NekoAssit 提示词生成完毕');
-        console.log(messageList);
+        console.log(list);
 
         // 调用 ai 接口，如果 json 解析失败了，则重试一次，再失败则报错
         for (let i = 0; i < 2; ++i) {
@@ -174,6 +198,19 @@ export class NekoAssist implements QBotPlugin {
             this.saveMemory();
           }
 
+          // 检查是否需要删除定时任务
+          if (json.deleteCorn) {
+            for (const item of json.deleteCorn) {
+              this.removeCornTask(item);
+            }
+          }
+
+          // 检查是否需要添加定时任务
+          if (json.corn) {
+            const corn = json.corn;
+            this.createCornTask(corn.name, corn.type, corn.time, corn.desc);
+          }
+
           // 过滤掉 emoji 字符
           reply = reply.replace(/\p{Emoji}/gu, '');
 
@@ -182,13 +219,18 @@ export class NekoAssist implements QBotPlugin {
             reply = `[CQ:reply,id=${messageId}] ${reply}`;
           }
 
-          await qbot.sendGroupMessage(reply);
+          reply = reply.trim();
+
+          if (reply) {
+            await qbot.sendGroupMessage(reply);
+          }
+
           messageList.push({ role: 'assistant', content: llmRes });
 
-          // 检查是否需要执行指令
-          if (json.command) {
+          // 检查是否需要执行指令，创建定时任务时不执行
+          if (!json.corn && json.command) {
             for (const item of Array.isArray(json.command) ? json.command : [json.command]) {
-              await qbot.command.invoke(item);
+              await qbot.command.invoke(item, userId);
             }
           }
         }
@@ -197,13 +239,13 @@ export class NekoAssist implements QBotPlugin {
           let commandRes = '[系统操作]\n\n';
 
           for (const item of Array.isArray(json.command) ? json.command : [json.command]) {
-            commandRes += `指令 ${item} 的执行结果：\n${await qbot.command.invokeForLLM(item)}\n\n`;
+            commandRes += `指令 ${item} 的执行结果：\n${await qbot.command.invokeForLLM(item, userId)}\n\n`;
           }
 
           messageList.push({ role: 'user', content: commandRes });
         }
 
-        continueLoop = json.continue;
+        continueLoop = json.continue || json.action === 'command-background';
       }
     } catch (e) {
       console.log('❌ in NekoAssist.reply():', e);
@@ -221,15 +263,17 @@ export class NekoAssist implements QBotPlugin {
   }
 
   /** 生成系统提示词 */
-  async generateSystemPrompt() {
+  async generateSystemPrompt(need_history = true) {
     const { qbot } = this;
     const currentTime = dayjs().format('YYYY-MM-DD HH:mm');
 
-    const recentHistory = (await qbot.getRecentHistory(15))
-      .map(item => {
-        return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
-      })
-      .join('\n');
+    const recentHistory = need_history
+      ? (await qbot.getRecentHistory(15))
+          .map(item => {
+            return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
+          })
+          .join('\n')
+      : '';
 
     const commandsDescription = Array.from(qbot.command.metaMap.values())
       .map(cmd => cmd.description)
@@ -240,6 +284,7 @@ export class NekoAssist implements QBotPlugin {
       .replace('<%= COMMANDS %>', commandsDescription)
       .replace('<%= MEMORY %>', JSON.stringify(this.memory))
       .replace('<%= HISTORY %>', recentHistory)
+      .replace('<%= CORN_TASKS %>', this.getCornTasksPrompts())
       .replace('<%= CURRENT_TIME %>', currentTime);
   }
 
@@ -267,5 +312,59 @@ export class NekoAssist implements QBotPlugin {
         break;
       }
     }
+  }
+
+  /** 创建单个定时任务 */
+  createCornTask(name: string, type: 'at' | 'corn', time: string, desc: string) {
+    const cornTasks = this.cornTasks;
+
+    // 存在重名任务时，先销毁旧任务
+    this.removeCornTask(name);
+
+    const spec = type === 'at' ? dayjs(time, 'YYYY-MM-DD HH:mm').valueOf() : time;
+    const { qbot } = this;
+    const job = schedule.scheduleJob(name, spec, () => {
+      console.log('🚀 定时任务已触发', name, type, time, desc);
+      qbot.invokeGroupMessage(
+        new SystemMessage({
+          group_id: qbot.targetGroup,
+          account: qbot.account,
+          rawMessage: `[CQ:at,qq=${this.qbot.account}] [定时任务触发 ${name}] ${desc}`,
+        })
+      );
+
+      // 一次性的任务要在执行后删除
+      if (type === 'at') {
+        this.removeCornTask(name);
+      }
+    });
+
+    cornTasks[name] = { type, time, desc };
+    this.saveCornTasks();
+    qbot.sendGroupMessage(`定时任务已创建：${type} ${time}\n${desc}`);
+    console.log('✅ 定时任务已创建：', name, type, time, desc);
+  }
+
+  /** 移除单个定时任务 */
+  removeCornTask(name: string) {
+    const cornTasks = this.cornTasks;
+
+    if (cornTasks[name]) {
+      schedule.cancelJob(name);
+      delete cornTasks[name];
+      this.saveCornTasks();
+      console.log('✅ 定时任务已删除：', name);
+    }
+  }
+
+  /** 获取描述现有定时任务的提示词 */
+  getCornTasksPrompts() {
+    let prompts: string[] = [];
+
+    for (const [key, value] of Object.entries(this.cornTasks)) {
+      prompts.push(`${key}[${value.type} ${value.time}]: ${value.desc}`);
+    }
+
+    return prompts.join('\n') || '暂无定时任务';
   }
 }

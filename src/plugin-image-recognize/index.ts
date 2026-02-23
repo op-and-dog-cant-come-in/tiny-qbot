@@ -18,8 +18,8 @@ export class ImageRecognize implements QBotPlugin {
       name: '识图',
       // alias: ['image', 'img'],
       description: '/识图 <图片> 使用AI识别图片内容，以文本形式描述',
-      handler: (args: string) => this.recognizeImage(args),
-      handlerForLLM: (args: string) => this.recognizeImageForLLM(args),
+      handler: (args: string, sender: number) => this.recognizeImage(args, sender),
+      handlerForLLM: (args: string, sender: number) => this.recognizeImageForLLM(args, sender),
     });
   };
 
@@ -36,13 +36,14 @@ export class ImageRecognize implements QBotPlugin {
     return null;
   }
 
-  async recognizeImage(args: string) {
+  async recognizeImage(args: string, sender: number) {
     let imageUrl = this.extractImageUrl(args);
 
-    // 当前消息没有提供图片的话，尝试使用上一条消息再试一次
+    // 当前消息没有提供图片的话，尝试使用上两条消息再试一次
     if (!imageUrl) {
-      const [prevMsg] = await this.qbot.getRecentHistory(1);
-      imageUrl = this.extractImageUrl(prevMsg.raw_message);
+      // 找出最近 5 条消息中发送者的消息的前两条进行尝试
+      const [prev1, prev2] = (await this.qbot.getRecentHistory(5)).filter(item => Number(item.sender) === sender);
+      imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');
 
       // 也没找到图片的话就报错
       if (!imageUrl) {
@@ -81,12 +82,13 @@ export class ImageRecognize implements QBotPlugin {
     }
   }
 
-  async recognizeImageForLLM(args: string): Promise<string> {
+  async recognizeImageForLLM(args: string, sender: number): Promise<string> {
     let imageUrl = this.extractImageUrl(args);
 
     if (!imageUrl) {
-      const [prevMsg] = await this.qbot.getRecentHistory(1);
-      imageUrl = this.extractImageUrl(prevMsg?.raw_message || '');
+      // 找出最近 5 条消息中发送者的消息的前两条进行尝试
+      const [prev1, prev2] = (await this.qbot.getRecentHistory(5)).filter(item => Number(item.sender) === sender);
+      imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');
 
       if (!imageUrl) {
         return '没找到图片数据喵，请在指令消息或指令消息的上一条消息中提供图片喵';
