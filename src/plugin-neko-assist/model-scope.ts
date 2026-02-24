@@ -1,3 +1,4 @@
+import { HttpClient } from '../utils/http-client.ts';
 import { type AIClient, type AIMessageItem } from '../ai-client.ts';
 
 const models = [
@@ -14,6 +15,8 @@ const models = [
   'MiniMax/MiniMax-M1-80k',
 ];
 
+const client = new HttpClient();
+
 export class ModelScope implements AIClient {
   apiKey: string;
   currentModel = models[0];
@@ -23,60 +26,44 @@ export class ModelScope implements AIClient {
   }
 
   async chat(messages: AIMessageItem[]): Promise<[boolean, string]> {
-    const maxRetries = 3;
+    let loop = true;
 
-    for (let i = 0; i < maxRetries; ++i) {
-      try {
-        const res = await fetch('https://api-inference.modelscope.cn/v1/chat/completions', {
-          method: 'POST',
+    while (loop) {
+      const [data, error, res] = await client.post(
+        'https://api-inference.modelscope.cn/v1/chat/completions',
+        {
+          model: this.currentModel,
+          messages,
+          stream: false,
+          // enable_thinking: false,
+        },
+        {
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            model: this.currentModel,
-            messages,
-            stream: false,
-            enable_thinking: false,
-          }),
-        });
-
-        // 如果是 429 报错，换一个模型重新试一次
-        if (res.status === 429) {
-          console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
-          this.currentModel = models[models.indexOf(this.currentModel) + 1];
-
-          if (!this.currentModel) {
-            return [false, '模型额度用完了喵，没法回复了喵'];
-          }
-
-          --i;
-          continue;
         }
+      );
 
-        if (res.status >= 400 && res.status < 500) {
-          console.log('❌ chat 接口请求失败\n', res);
-          throw new Error(`Client error: ${res.status} ${res.statusText}`);
-        }
-
-        const json: any = await res.json();
-
-        console.log('✅ chat 接口请求成功');
-        console.dir(json, { depth: null });
-
-        const choice = json.choices?.[0];
-
-        if (!choice) {
-          return [false, '响应格式错误'];
-        }
-
+      if (!error) {
+        const choice = data.choices?.[0];
         return [true, choice.message.content || choice.delta.content || ''];
-      } catch (e) {
-        console.error(e);
-        return [false, e.toString()];
       }
-    }
 
-    return [false, '连接超时，请稍后再试'];
+      // 如果是 429 报错，则更换模型重新请求
+      if (res.status === 429) {
+        console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
+        this.currentModel = models[models.indexOf(this.currentModel) + 1];
+
+        if (!this.currentModel) {
+          return [false, '模型额度用完了喵，没法回复了喵'];
+        }
+
+        continue;
+      }
+
+      // 服务器错误
+      return [false, error.toString()];
+    }
   }
 }

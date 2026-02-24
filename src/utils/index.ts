@@ -89,4 +89,7 @@ export const replaceAllAsync = async (
   });
 };
 
+export const ensureArray = <T>(arr: T | T[]) => (Array.isArray(arr) ? arr : [arr]);
+
 export * from './worker.ts';
+export * from './http-client.ts';

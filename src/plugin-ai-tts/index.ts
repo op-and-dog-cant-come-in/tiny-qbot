@@ -1,3 +1,4 @@
+import { HttpClient } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
 
 const SPEAKERS = [
@@ -189,6 +190,8 @@ const SPEAKERS = [
 
 const DEFAULT_SPEAKER = '病娇少女';
 
+const client = new HttpClient();
+
 export class AITTS implements QBotPlugin {
   name = 'ai-tts';
   qbot: QBot;
@@ -240,27 +243,20 @@ export class AITTS implements QBotPlugin {
       text = parts.slice(1).join('');
     }
 
-    try {
-      const url = `https://api.milorapart.top/apis/AIvoice/?text=${encodeURIComponent(text)}&speaker=${encodeURIComponent(speaker)}`;
-      const res = await fetch(url);
-      const data = (await res.json()) as any;
+    const [data, error] = await client.get(
+      `https://api.milorapart.top/apis/AIvoice/?text=${encodeURIComponent(text)}&speaker=${encodeURIComponent(speaker)}`
+    );
 
-      if (!data || data.code !== 200 || !data.url) {
-        await this.qbot.sendGroupMessage(`语音生成失败了喵\n${data?.msg || '未知错误'}`);
-        console.log('❌ AITTS 生成语音失败');
-        console.log(res);
-        console.log(data);
-        return;
-      }
-
-      await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
-      console.log(`✅ AITTS 发送AI语音成功 (speaker: ${speaker})`);
-      console.log(data);
-    } catch (e) {
-      console.log('❌ AITTS 发送失败:');
-      console.log(e);
-      await this.qbot.sendGroupMessage(`语音生成失败了喵\n${e?.message || '未知错误'}`);
+    if (error) {
+      await this.qbot.sendGroupMessage(`语音生成失败了喵\n${error?.message || '未知错误'}`);
+      console.log('❌ AITTS 生成语音失败');
+      console.log(error);
+      return;
     }
+
+    await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
+    console.log(`✅ AITTS 发送AI语音成功 (speaker: ${speaker})`);
+    console.log(data);
   }
 
   async sendAIVoiceForLLM(args: string): Promise<string> {
@@ -279,18 +275,14 @@ export class AITTS implements QBotPlugin {
       text = parts.slice(1).join('');
     }
 
-    try {
-      const url = `https://api.milorapart.top/apis/AIvoice/?text=${encodeURIComponent(text)}&speaker=${encodeURIComponent(speaker)}`;
-      const res = await fetch(url);
-      const data = (await res.json()) as any;
+    const [data, error] = await client.get(
+      `https://api.milorapart.top/apis/AIvoice/?text=${encodeURIComponent(text)}&speaker=${encodeURIComponent(speaker)}`
+    );
 
-      if (!data || data.code !== 200 || !data.url) {
-        return `语音生成失败: ${data?.msg || '未知错误'}`;
-      }
-
-      return `[CQ:record,file=${data.url}]`;
-    } catch (e) {
-      return `语音生成失败: ${e?.message || '未知错误'}`;
+    if (error) {
+      return `语音生成失败: ${error?.message || '未知错误'}`;
     }
+
+    return `[CQ:record,file=${data.url}]`;
   }
 }

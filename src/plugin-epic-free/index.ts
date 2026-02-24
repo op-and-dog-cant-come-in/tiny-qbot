@@ -1,3 +1,4 @@
+import { HttpClient } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
 
 interface EpicFreeGame {
@@ -13,6 +14,8 @@ interface EpicFreeResponse {
   data: EpicFreeGame[];
   api_source: string;
 }
+
+const client = new HttpClient();
 
 export class EpicFree implements QBotPlugin {
   name = 'epic-free';
@@ -31,58 +34,50 @@ export class EpicFree implements QBotPlugin {
   };
 
   async sendEpicFreeGames() {
-    try {
-      const res = await fetch('https://api.milorapart.top/apis/free');
-      const data = (await res.json()) as EpicFreeResponse;
+    const [data, error] = await client.get<EpicFreeResponse>('/apis/free');
 
-      if (!data || data.code !== 200 || !data.data || data.data.length === 0) {
-        await this.qbot.sendGroupMessage('EpicFree 接口请求失败了喵\n' + JSON.stringify(data, null, 2));
-        console.log('❌ EpicFree 获取免费游戏失败');
-        console.log(res);
-        console.log(data);
-        return;
-      }
-
-      let message = `🎮 ${data.msg}\n\n`;
-
-      for (const game of data.data) {
-        message += `📦 ${game.name}\n`;
-        message += `💰 原价: ${game.original_price}\n`;
-        message += `⏰ 截止: ${game.end_time}\n`;
-        message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
-      }
-
-      await this.qbot.sendGroupMessage(message.trim());
-      console.log('✅ EpicFree 发送免费游戏信息成功');
-      console.log(data);
-    } catch (e) {
-      await this.qbot.sendGroupMessage('EpicFree 发送免费游戏信息失败了喵\n' + e.message);
-      console.log('❌ EpicFree 发送失败:');
-      console.log(e);
+    if (error) {
+      await this.qbot.sendGroupMessage('EpicFree 接口请求失败了喵\n' + error?.message || '未知错误');
+      console.log('❌ EpicFree 获取免费游戏失败');
+      console.log(error);
+      return;
     }
+
+    let message = `🎮 ${data.msg}\n\n`;
+
+    for (const game of data.data) {
+      message += `📦 ${game.name}\n`;
+      message += `💰 原价: ${game.original_price}\n`;
+      message += `⏰ 截止: ${game.end_time}\n`;
+      message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
+    }
+
+    await this.qbot.sendGroupMessage(message.trim());
+    console.log('✅ EpicFree 发送免费游戏信息成功');
+    console.log(data);
   }
 
   async getEpicFreeGamesForLLM(): Promise<string> {
-    try {
-      const res = await fetch('https://api.milorapart.top/apis/free');
-      const data = (await res.json()) as EpicFreeResponse;
+    const [data, error] = await client.get<EpicFreeResponse>('/apis/free');
 
-      if (!data || data.code !== 200 || !data.data || data.data.length === 0) {
-        return `Epic 免费游戏查询失败: ${data?.msg || '未知错误'}`;
-      }
-
-      let message = `${data.msg}\n\n`;
-
-      for (const game of data.data) {
-        message += `${game.name}\n`;
-        message += `原价: ${game.original_price}\n`;
-        message += `截止: ${game.end_time}\n`;
-        message += `介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
-      }
-
-      return `Epic 免费游戏信息:\n${message.trim()}`;
-    } catch (e) {
-      return `查询 Epic 免费游戏失败: ${e?.message || '未知错误'}`;
+    if (error) {
+      console.log('❌ EpicFree 获取免费游戏失败');
+      console.log(error);
+      return 'EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
     }
+
+    let message = `🎮 ${data.msg}\n\n`;
+
+    for (const game of data.data) {
+      message += `📦 ${game.name}\n`;
+      message += `💰 原价: ${game.original_price}\n`;
+      message += `⏰ 截止: ${game.end_time}\n`;
+      message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
+    }
+
+    console.log('✅ EpicFree 发送免费游戏信息成功');
+    console.log(data);
+
+    return message.trim();
   }
 }

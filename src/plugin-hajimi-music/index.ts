@@ -1,4 +1,7 @@
+import { HttpClient } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+
+const client = new HttpClient();
 
 export class HajimiMusic implements QBotPlugin {
   name = 'hajimi-music';
@@ -17,38 +20,29 @@ export class HajimiMusic implements QBotPlugin {
   };
 
   async sendHajimiMusic() {
-    try {
-      const res = await fetch('http://api.ocoa.cn/api/hjm.php');
-      const data = (await res.json()) as any;
+    const [data, error] = await client.get<any>('http://api.ocoa.cn/api/hjm.php');
 
-      if (!data || !data.url) {
-        console.log('❌ HajimiMusic 获取音乐链接失败');
-        console.log(res);
-        console.log(data);
-        return;
-      }
-
-      await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
-      console.log('✅ HajimiMusic 发送哈基米音乐成功');
-      console.log(data);
-    } catch (e) {
-      console.log('❌ HajimiMusic 发送失败:');
-      console.log(e);
+    if (error) {
+      console.log('❌ HajimiMusic 获取音乐链接失败');
+      console.log(error);
+      await this.qbot.sendGroupMessage('哈基米音乐获取失败了喵\n' + error?.message || '未知错误');
+      return;
     }
+
+    await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
+    console.log('✅ HajimiMusic 发送哈基米音乐成功');
+    console.log(data);
   }
 
   async sendHajimiMusicForLLM(): Promise<string> {
-    try {
-      const res = await fetch('http://api.ocoa.cn/api/hjm.php');
-      const data = (await res.json()) as any;
+    const [data, error] = await client.get<any>('/api/hjm.php');
 
-      if (!data || !data.url) {
-        return '获取哈基米音乐失败';
-      }
-
-      return `[CQ:record,file=${data.url}]`;
-    } catch (e) {
-      return `发送哈基米音乐失败: ${e?.message || '未知错误'}`;
+    if (error) {
+      console.log('❌ HajimiMusic 获取音乐链接失败');
+      console.log(error);
+      return '哈基米音乐获取失败了喵\n' + error?.message || '未知错误';
     }
+
+    return `[CQ:record,file=${data.url}]`;
   }
 }
