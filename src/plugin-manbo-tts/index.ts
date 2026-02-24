@@ -1,4 +1,7 @@
-import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+import { HttpClient } from '../utils/index.ts';
+import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
+
+const client = new HttpClient();
 
 export class ManboTTS implements QBotPlugin {
   name = 'manbo-tts';
@@ -11,59 +14,36 @@ export class ManboTTS implements QBotPlugin {
       name: '曼波',
       alias: ['manbo'],
       description: '/曼波 <文本内容> 将文本转换为曼波语音发送',
-      handler: (args: string) => this.sendManboVoice(args),
-      handlerForLLM: (args: string) => this.sendManboVoiceForLLM(args),
+      handler: this.sendManboVoice,
     });
   };
 
-  async sendManboVoice(text: string) {
-    text = text.trim();
+  sendManboVoice = async (params: CommandHandlerParams): Promise<string> => {
+    const { silent = false } = params;
+    const text = params.params.trim();
 
     if (!text) {
       console.log('❌ ManboTTS 文本内容为空');
-      return;
+      const text = '文本内容为空，无法生成曼波语音';
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
 
-    try {
-      const url = `https://api.milorapart.top/apis/mbAIsc?text=${encodeURIComponent(text)}`;
-      const res = await fetch(url);
-      const data = (await res.json()) as any;
+    const [data, error] = await client.get(`https://api.milorapart.top/apis/mbAIsc?text=${encodeURIComponent(text)}`);
 
-      if (!data || data.code !== 200 || !data.url) {
-        console.log('❌ ManboTTS 生成语音失败');
-        console.log(res);
-        console.log(data);
-        return;
-      }
-
-      await this.qbot.sendGroupMessage(`[CQ:record,file=${data.url}]`);
-      console.log('✅ ManboTTS 发送曼波语音成功');
-      console.log(data);
-    } catch (e) {
-      console.log('❌ ManboTTS 发送失败:');
-      console.log(e);
-    }
-  }
-
-  async sendManboVoiceForLLM(text: string): Promise<string> {
-    text = text.trim();
-
-    if (!text) {
-      return '文本内容为空，无法生成曼波语音';
+    if (error) {
+      const text = '生成曼波语音失败了喵\n' + error?.message || '未知错误';
+      console.log('❌ ManboTTS 生成语音失败');
+      console.log(error);
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
 
-    try {
-      const url = `https://api.milorapart.top/apis/mbAIsc?text=${encodeURIComponent(text)}`;
-      const res = await fetch(url);
-      const data = (await res.json()) as any;
+    const result = `[CQ:record,file=${data.url}]`;
+    !silent && (await this.qbot.sendGroupMessage(result));
+    console.log('✅ ManboTTS 生成语音成功');
+    console.log(data);
 
-      if (!data || data.code !== 200 || !data.url) {
-        return `曼波语音生成失败: ${data?.msg || '未知错误'}`;
-      }
-
-      return `[CQ:record,file=${data.url}]`;
-    } catch (e) {
-      return `曼波语音生成失败: ${e?.message || '未知错误'}`;
-    }
-  }
+    return result;
+  };
 }

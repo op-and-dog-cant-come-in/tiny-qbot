@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 const BASE_URL = 'https://api-takumi.mihoyo.com';
 
@@ -52,8 +52,7 @@ export class MihoyoCheckIn implements QBotPlugin {
     qbot.command.register({
       name: '崩铁签到',
       description: '/崩铁签到 <cookie> 执行米游社崩坏：星穹铁道每日签到',
-      handler: (params: string) => this.performCheckIn(params),
-      handlerForLLM: (params: string) => this.performCheckInForLLM(params),
+      handler: this.performCheckIn,
     });
   };
 
@@ -96,7 +95,7 @@ export class MihoyoCheckIn implements QBotPlugin {
   }
 
   /** 获取游戏账号列表 */
-  async getAccountList(cookie: string, deviceId: string): Promise<AccountInfo[]> {
+  getAccountList = async (cookie: string, deviceId: string): Promise<AccountInfo[]> => {
     const url = `${BASE_URL}/binding/api/getUserGameRolesByCookie?game_biz=hkrpg_cn`;
     const res = await fetch(url, {
       method: 'GET',
@@ -112,6 +111,7 @@ export class MihoyoCheckIn implements QBotPlugin {
       throw new Error(`获取账号列表失败: ${data.message}`);
     }
 
+    console.log('✅ 成功获取账号列表');
     console.dir(res, { depth: null });
     console.dir(data, { depth: null });
 
@@ -120,7 +120,7 @@ export class MihoyoCheckIn implements QBotPlugin {
       uid: item.game_uid,
       region: item.region,
     }));
-  }
+  };
 
   /** 获取签到奖励列表（由每天签到结果组成的数组） */
   async getCheckinRewards(cookie: string, deviceId: string): Promise<Array<{ name: string; cnt: number }>> {
@@ -255,9 +255,14 @@ export class MihoyoCheckIn implements QBotPlugin {
   }
 
   /** 签到操作的入口函数 */
-  async performCheckIn(cookie: string): Promise<string> {
+  performCheckIn = async (params: CommandHandlerParams): Promise<string> => {
+    const { silent = false } = params;
+    let cookie = params.params;
+
     if (!cookie || cookie.trim() === '') {
-      await this.qbot.sendGroupMessage('请提供米游社 Cookie 喵');
+      const text = '请提供米游社 Cookie 喵';
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
 
     const deviceId = this.generateDeviceId();
@@ -271,19 +276,21 @@ export class MihoyoCheckIn implements QBotPlugin {
       console.dir(accounts, { depth: null });
 
       if (accounts.length === 0) {
-        await this.qbot.sendGroupMessage('未找到绑定的崩坏：星穹铁道账号');
-        return '未找到绑定的崩坏：星穹铁道账号';
+        const text = '未找到绑定的崩坏：星穹铁道账号';
+        !silent && (await this.qbot.sendGroupMessage(text));
+        return text;
       }
 
       // 获取奖励列表
       const awards = await this.getCheckinRewards(cookie, deviceId);
 
-      console.log('✅ 成功获取签到奖励列表');
-      console.dir(awards, { depth: null });
+      // console.log('✅ 成功获取签到奖励列表');
+      // console.dir(awards, { depth: null });
 
       if (awards.length === 0) {
-        await this.qbot.sendGroupMessage('未找到签到奖励列表');
-        return '未找到签到奖励列表';
+        const text = '未找到签到奖励列表';
+        !silent && (await this.qbot.sendGroupMessage(text));
+        return text;
       }
 
       let message = `🎮 崩坏：星穹铁道 签到结果\n\n`;
@@ -295,42 +302,14 @@ export class MihoyoCheckIn implements QBotPlugin {
       }
 
       message += results.join('\n\n');
-      await this.qbot.sendGroupMessage(message);
+      !silent && (await this.qbot.sendGroupMessage(message));
+      return message;
     } catch (e: any) {
       console.log('❌ 签到过程出错:');
       console.log(e);
-      await this.qbot.sendGroupMessage(`签到过程出错: ${e.message}`);
+      const text = `签到过程出错: ${e.message}`;
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
-  }
-
-  async performCheckInForLLM(cookie: string): Promise<string> {
-    if (!cookie || cookie.trim() === '') {
-      return '请提供米游社 Cookie';
-    }
-
-    const deviceId = this.generateDeviceId();
-    cookie = cookie.trim();
-
-    try {
-      const accounts = await this.getAccountList(cookie, deviceId);
-
-      if (accounts.length === 0) {
-        return '未找到绑定的崩坏：星穹铁道账号';
-      }
-
-      const awards = await this.getCheckinRewards(cookie, deviceId);
-      const results: string[] = [];
-
-      for (const account of accounts) {
-        const result = await this.signAccount(account, cookie, deviceId, awards);
-        results.push(result.message);
-      }
-
-      return results.join('\n\n');
-    } catch (e: any) {
-      console.log('❌ 签到过程出错:');
-      console.log(e);
-      return `签到过程出错: ${e.message}`;
-    }
-  }
+  };
 }

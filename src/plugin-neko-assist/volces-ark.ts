@@ -4,6 +4,9 @@ import { type AIClient, type AIMessageItem } from '../ai-client.ts';
 export class VolcesArk implements AIClient {
   apiKey: string;
 
+  /** 当前使用的模型 */
+  currentModel: string = 'doubao-seed-1-8-251228';
+
   constructor(apiKey: string) {
     this.apiKey = apiKey;
   }
@@ -20,7 +23,7 @@ export class VolcesArk implements AIClient {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'doubao-seed-1-8-251228',
+            model: this.currentModel,
             input: messages,
             // tools: [
             //   {

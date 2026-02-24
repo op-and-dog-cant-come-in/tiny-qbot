@@ -27,11 +27,15 @@ export class HttpClient {
             body: JSON.stringify(data),
           });
 
-          this.debugInfo(`🌐✅ 收到响应头 POST ${this.baseUrl + path}`, res);
+          this.debugInfo(`🌐✅ 收到响应头 GET ${this.baseUrl + path}`, {
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+          });
 
           // 判断状态码是否为 200~299
           if (!res.ok) {
-            this.debugInfo(`🌐❌ 错误的状态码 POST ${this.baseUrl + path}`, res);
+            this.debugInfo(`🌐❌ 错误的状态码 POST ${this.baseUrl + path}`, res.status, res.statusText);
             return [null, new Error(res.statusText), res];
           }
 
@@ -68,7 +72,7 @@ export class HttpClient {
     }
   }
 
-  async get<T, U = any>(path: string, options: Partial<RequestOptions> = {}): Promise<RequestResult<U>> {
+  async get<U = any>(path: string, options: Partial<RequestOptions> = {}): Promise<RequestResult<U>> {
     try {
       const { retryCount = 1 } = options;
 
@@ -81,7 +85,12 @@ export class HttpClient {
             headers: { ...this.headers, ...options.headers },
           });
 
-          this.debugInfo(`🌐✅ 收到响应头 GET ${this.baseUrl + path}`, res);
+          this.debugInfo(`🌐✅ 收到响应头 GET ${this.baseUrl + path}`);
+          this.debugInfo({
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+          });
 
           // 判断状态码是否为 200~299
           if (!res.ok) {

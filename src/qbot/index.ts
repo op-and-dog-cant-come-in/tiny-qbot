@@ -43,17 +43,14 @@ export class QBot {
   /** 指令相关逻辑 */
   command = {
     /** 当前已注册的指令执行函数 */
-    handlerMap: new Map<string, (params: string, sender: number) => any>(),
-
-    /** 给 ai 使用的指令执行函数 */
-    handlerForLLMMap: new Map<string, (params: string, sender: number) => Promise<string>>(),
+    handlerMap: new Map<string, (params: CommandHandlerParams) => Promise<string>>(),
 
     /** 当前已注册的指令元信息 */
     metaMap: new Map<string, CommandParams>(),
 
     /** 注册一条指令，该操作无法撤销 */
     register: (params: CommandParams) => {
-      const { handlerMap, handlerForLLMMap, metaMap } = this.command;
+      const { handlerMap, metaMap } = this.command;
 
       if (handlerMap.has(params.name)) {
         throw new Error(`指令 ${params.name} 已注册`);
@@ -71,51 +68,36 @@ export class QBot {
         handlerMap.set(item, params.handler);
       }
 
-      handlerForLLMMap.set(params.name, params.handlerForLLM);
-
-      for (const item of params.alias || []) {
-        handlerForLLMMap.set(item, params.handlerForLLM);
-      }
-
       metaMap.set(params.name, params);
     },
 
-    /** 执行一条指令，存在该指令时返回 true，否则返回 false */
-    invoke: async (command: string, sender: number) => {
-      // 有时 ai 会忘记填写 command 字段，这里做下容错
-      if (!command) return '指令为空';
+    /** 执行一条指令，返回 [是否成功执行指令, 指令的执行结果] */
+    invoke: async (command: string, sender: number, silent = false): Promise<[boolean, string]> => {
+      try {
+        // 有时 ai 会忘记填写 command 字段，这里做下容错
+        if (!command) return [false, '指令为空，请提供指令内容'];
 
-      let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
+        let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
 
-      if (name.startsWith('/')) {
-        name = name.slice(1);
+        // 允许省略指令开头的斜杠
+        if (name.startsWith('/')) {
+          name = name.slice(1);
+        }
+
+        const handler = this.command.handlerMap.get(name.toLowerCase());
+
+        if (!handler) {
+          return [false, `指令 ${name} 不存在`];
+        }
+
+        const result = await handler({ params: args, sender, silent });
+
+        return [true, result];
+      } catch (e) {
+        console.log(`❌ 指令执行出错 ${sender}: ${command}`);
+        console.dir(e);
+        return [false, e.toString()];
       }
-
-      const handler = this.command.handlerMap.get(name.toLowerCase());
-
-      if (handler) {
-        await handler(args, sender);
-        return true;
-      }
-
-      return false;
-    },
-
-    /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
-    invokeForLLM: async (command: string, sender: number) => {
-      if (!command) return '指令为空';
-
-      let [name, args] = command.trim().replace(/\s+/, '\u200B').split('\u200B');
-
-      if (name.startsWith('/')) {
-        name = name.slice(1);
-      }
-
-      const handler = this.command.handlerForLLMMap.get(name.toLowerCase());
-
-      if (!handler) return '没有找到匹配的指令喵';
-
-      return await handler(args, sender);
     },
   };
 
@@ -169,10 +151,15 @@ export class QBot {
 
       this.latestMessageId = Number(data.message_id);
 
-      // 如果当前消息是指令调用的话，则不触发 onGroupMessage 回调
-      if (await this.command.invoke(data.raw_message, Number(data.user_id))) return;
+      // 忽略空消息
+      if (!data.raw_message.trim()) return;
 
-      this.invokeGroupMessage(data);
+      // 尝试执行指令调用，如果成功匹配指令，则不触发插件的 onGroupMessage 回调
+      const [success] = await this.command.invoke(data.raw_message, Number(data.user_id));
+
+      if (!success) {
+        this.invokeGroupMessage(data);
+      }
     });
 
     client.on('notice.notify.poke', async (data: GroupMessageEvent) => {
@@ -206,7 +193,7 @@ export class QBot {
     console.log(`🚀 ${styleText('green', 'QBot 启动完毕')}`);
   }
 
-  /** 触发指定群消息的后续处理操作 */
+  /** 手动触发插件的 onGroupMessage 消息，方法不会在 QQ 中真实发送 data 消息，但会记录在消息历史中 */
   async invokeGroupMessage(data: GroupMessageEvent | SystemMessage) {
     // 记录历史消息
     await this.addHistory(String(data.message_id), String(data.user_id), data.raw_message, data.time);
@@ -291,9 +278,17 @@ export interface CommandParams {
   /** 指令描述 */
   description: string;
 
-  /** 指令执行函数 */
-  handler: (params: string, sender: number) => void;
+  /** 指令执行函数，需以字符串形式返回 LLM 友好的执行结果描述 */
+  handler: (params: CommandHandlerParams) => Promise<string>;
+}
 
-  /** 给 ai 使用的指令执行函数，会把指令结果以字符串形式返回，方便 ai 阅读 */
-  handlerForLLM?: (params: string, sender: number) => Promise<string>;
+export interface CommandHandlerParams {
+  /** 指令参数，固定为字符串内容，需指令根据需要自行解析格式 */
+  params: string;
+
+  /** 发送者 qq 号 */
+  sender: number;
+
+  /** 是否静默执行，不发送群消息提示 */
+  silent: boolean;
 }

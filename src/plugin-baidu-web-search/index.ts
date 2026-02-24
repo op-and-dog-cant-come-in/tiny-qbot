@@ -1,5 +1,5 @@
 import { HttpClient } from '../utils/http-client.ts';
-import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface BaiduSearchMessage {
   content: string;
@@ -59,15 +59,18 @@ export class BaiduWebSearch implements QBotPlugin {
       name: 'web-search',
       alias: ['搜索', '百度搜索'],
       description: '/web-search <关键词> 使用百度搜索查询网络内容',
-      handler: (args: string) => this.sendSearchResult(args),
-      handlerForLLM: (args: string) => this.getSearchResultForLLM(args),
+      handler: this.sendSearchResult,
     });
   };
 
-  async sendSearchResult(query: string) {
-    if (!query || query.trim() === '') {
-      await this.qbot.sendGroupMessage('请提供搜索关键词，例如: /web-search 北京景点');
-      return;
+  sendSearchResult = async (params: CommandHandlerParams): Promise<string> => {
+    const { silent = false } = params;
+    let query = params.params.trim();
+
+    if (!query) {
+      const text = '请提供搜索关键词，例如: /web-search 北京景点';
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
 
     const [data, error] = await client.post<BaiduSearchRequest, BaiduSearchResponse>(
@@ -86,17 +89,19 @@ export class BaiduWebSearch implements QBotPlugin {
     );
 
     if (error) {
-      await this.qbot.sendGroupMessage('百度搜索请求失败了喵\n' + (error?.message || '未知错误'));
+      const text = '百度搜索请求失败了喵\n' + (error?.message || '未知错误');
+      !silent && (await this.qbot.sendGroupMessage(text));
       console.log('❌ BaiduWebSearch 搜索失败');
       console.log(error);
-      return;
+      return text;
     }
 
     const references = data.references || [];
 
     if (references.length === 0) {
-      await this.qbot.sendGroupMessage(`🔍 搜索结果: ${query}\n\n未找到相关结果`);
-      return;
+      const text = `🔍 搜索结果: ${query}\n\n未找到相关结果`;
+      !silent && (await this.qbot.sendGroupMessage(text));
+      return text;
     }
 
     let message = `搜索结果: ${query}\n\n`;
@@ -109,54 +114,11 @@ export class BaiduWebSearch implements QBotPlugin {
       message += `🔗 ${ref.url}\n\n`;
     }
 
-    await this.qbot.sendGroupMessage(message.trim());
+    message = message.trim();
+
+    !silent && (await this.qbot.sendGroupMessage(message));
     console.log('✅ BaiduWebSearch 发送搜索结果成功');
-  }
 
-  async getSearchResultForLLM(query: string): Promise<string> {
-    if (!query || query.trim() === '') {
-      return '请提供搜索关键词';
-    }
-
-    const [data, error] = await client.post<BaiduSearchRequest, BaiduSearchResponse>(
-      '/v2/ai_search/chat/completions',
-      {
-        messages: [{ content: query, role: 'user' }],
-        stream: false,
-      },
-      {
-        headers: {
-          Host: 'qianfan.baidubce.com',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-      }
-    );
-
-    if (error) {
-      console.log('❌ BaiduWebSearch 搜索失败');
-      console.log(error);
-      return '百度搜索请求失败了喵\n' + (error?.message || '未知错误');
-    }
-
-    const references = data.references || [];
-
-    if (references.length === 0) {
-      return `搜索结果: ${query}\n\n未找到相关结果`;
-    }
-
-    let message = `搜索结果: ${query}\n\n`;
-
-    for (let i = 0; i < Math.min(references.length, 5); i++) {
-      const ref = references[i];
-      message += `📌 ${ref.title}\n`;
-      message += `📅 ${ref.date}\n`;
-      message += `📝 ${ref.snippet.substring(0, 800)}${ref.snippet.length > 800 ? '...' : ''}\n`;
-      message += `🔗 ${ref.url}\n\n`;
-    }
-
-    console.log('✅ BaiduWebSearch 获取搜索结果成功');
-
-    return message.trim();
-  }
+    return message;
+  };
 }

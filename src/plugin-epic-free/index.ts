@@ -1,5 +1,5 @@
 import { HttpClient } from '../utils/http-client.ts';
-import { type QBotPlugin, type QBot } from '../qbot/index.ts';
+import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface EpicFreeGame {
   name: string;
@@ -28,19 +28,20 @@ export class EpicFree implements QBotPlugin {
       name: 'epic-free',
       alias: ['喜加一'],
       description: '/epic-free 查询当前 Epic 免费游戏，该指令没有参数',
-      handler: () => this.sendEpicFreeGames(),
-      handlerForLLM: () => this.getEpicFreeGamesForLLM(),
+      handler: this.sendEpicFreeGames,
     });
   };
 
-  async sendEpicFreeGames() {
-    const [data, error] = await client.get<EpicFreeResponse>('/apis/free');
+  sendEpicFreeGames = async (params: CommandHandlerParams): Promise<string> => {
+    const { silent = false } = params;
+    const [data, error] = await client.get<EpicFreeResponse>('https://api.milorapart.top/apis/free');
 
     if (error) {
-      await this.qbot.sendGroupMessage('EpicFree 接口请求失败了喵\n' + error?.message || '未知错误');
+      const text = 'EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
+      !silent && (await this.qbot.sendGroupMessage(text));
       console.log('❌ EpicFree 获取免费游戏失败');
       console.log(error);
-      return;
+      return text;
     }
 
     let message = `🎮 ${data.msg}\n\n`;
@@ -52,32 +53,11 @@ export class EpicFree implements QBotPlugin {
       message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
     }
 
-    await this.qbot.sendGroupMessage(message.trim());
-    console.log('✅ EpicFree 发送免费游戏信息成功');
-    console.log(data);
-  }
-
-  async getEpicFreeGamesForLLM(): Promise<string> {
-    const [data, error] = await client.get<EpicFreeResponse>('/apis/free');
-
-    if (error) {
-      console.log('❌ EpicFree 获取免费游戏失败');
-      console.log(error);
-      return 'EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
-    }
-
-    let message = `🎮 ${data.msg}\n\n`;
-
-    for (const game of data.data) {
-      message += `📦 ${game.name}\n`;
-      message += `💰 原价: ${game.original_price}\n`;
-      message += `⏰ 截止: ${game.end_time}\n`;
-      message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
-    }
-
+    message = message.trim();
+    !silent && (await this.qbot.sendGroupMessage(message));
     console.log('✅ EpicFree 发送免费游戏信息成功');
     console.log(data);
 
-    return message.trim();
-  }
+    return message;
+  };
 }

@@ -54,6 +54,28 @@ export class NekoAssist implements QBotPlugin {
       fs.readFile('system-prompts.md', 'utf-8'),
       tryReadJson('memory.json', {}),
     ]);
+
+    qbot.command.register({
+      name: 'current-model',
+      alias: ['当前模型'],
+      description: '查看猫猫当前使用的ai模型',
+      handler: async params => {
+        const model = this.aiClient.currentModel;
+        !params.silent && (await qbot.sendGroupMessage(`猫猫当前使用的ai模型为 ${model}`));
+        return model;
+      },
+    });
+
+    qbot.command.register({
+      name: 'memory',
+      alias: ['长期记忆'],
+      description: '查看猫猫的长期记忆',
+      handler: async params => {
+        const memory = JSON.stringify(this.memory, null, 2);
+        !params.silent && (await qbot.sendGroupMessage(`猫猫的长期记忆为 ${memory}`));
+        return memory;
+      },
+    });
   };
 
   onGroupMessage = async (data: GroupMessageEvent) => {
@@ -65,7 +87,7 @@ export class NekoAssist implements QBotPlugin {
       await this.reply(data.user_id, message, messageId, 100);
     }
     // 包含关键词的优先级次之
-    if (message.includes('猫猫')) {
+    else if (message.includes('猫猫')) {
       await this.reply(data.user_id, message, messageId, 50);
     } else if (message.includes('猫')) {
       await this.reply(data.user_id, message, messageId, 10);
@@ -104,23 +126,22 @@ export class NekoAssist implements QBotPlugin {
       this.isReplying = true;
       this.replyingUserId = userId;
 
-      const messageList: AIMessageItem[] = [{ role: 'user', content: message }];
+      const messageList: AIMessageItem[] = [
+        // 如果是定时任务等系统消息（id 为 0），则不添加历史消息记录
+        { role: 'system', content: await this.generateSystemPrompt(Number(messageId) !== 0) },
+        { role: 'user', content: `[系统提示] 请猫猫回复 id 为 ${messageId} 的消息：${message}` },
+      ];
 
       // 开始 agent 循环，在遇到 silent 和 memory 指令前持续对话
-      while (true) {
+      let continueLoop = true;
+
+      while (continueLoop) {
         let json: any;
         let llmRes = '';
 
-        // 如果是定时任务等系统消息（id 为 0），则不添加历史消息记录
-        const systemPrompts = await this.generateSystemPrompt(Number(messageId) !== 0);
-        const list: AIMessageItem[] = [{ role: 'system', content: systemPrompts }, ...messageList];
-
-        console.log('*️⃣ NekoAssit 提示词生成完毕');
-        console.log(list);
-
         // 调用 ai 接口，如果 json 解析失败了，则重试一次，再失败则报错
         for (let i = 0; i < 2; ++i) {
-          const [success, res] = await this.aiClient.chat(list);
+          const [success, res] = await this.aiClient.chat(messageList);
 
           if (!success) {
             await qbot.sendGroupMessage(`接口请求失败了喵\n${res}`);
@@ -147,75 +168,69 @@ export class NekoAssist implements QBotPlugin {
         console.log('✅ NekoAssist chat 接口 JSON 指令解析完毕');
         console.dir(json, { depth: null });
 
-        // 如果 action 为 silent，则不进行任何操作
-        if (json.action === 'silent') {
-          break;
-        }
-
-        messageList.push({ role: 'assistant', content: llmRes });
-
-        // 为 reply 时生成回复消息
-        if (json.action === 'reply') {
-          let reply = json.reply || '';
-
-          // 过滤掉 at 提问者的内容，at 其他人的内容保留
-          reply = reply.replace(`[CQ:at,qq=${userId}]`, '');
-
-          // 过滤掉 emoji 字符
-          reply = reply.replace(/\p{Emoji}/gu, '');
-
-          // 如果当前最新消息不是提问消息，则添加 reply
-          if (qbot.latestMessageId !== messageId) {
-            reply = `[CQ:reply,id=${messageId}] ${reply}`;
+        // llm 可能以数组形式一次返回多条 action，我们适配下统一以数组形式处理
+        for (const currentAction of ensureArray(json)) {
+          // 如果 action 为 silent，则不进行任何操作
+          if (currentAction.action === 'silent') {
+            continueLoop = false;
           }
 
-          // 避免发送空消息
-          if ((reply = reply.trim())) {
-            await qbot.sendGroupMessage(reply);
-          } else break;
+          messageList.push({ role: 'assistant', content: llmRes });
 
-          messageList.push(
-            { role: 'user', content: '[系统消息] 等待猫猫的下一步操作' } // 确保接口拿到的对话记录满足 assistant > user > assistant 顺序
-          );
-        }
-        // 为 command 时，执行系统指令
-        else if (json.action === 'command') {
-          const commands = ensureArray(json.command);
+          // 为 reply 时生成回复消息
+          if (currentAction.action === 'reply') {
+            let reply = currentAction.reply || '';
 
-          // 理论上不应出现数组为空的情况
-          if (!commands.length) break;
+            // 过滤掉 at 提问者的内容，at 其他人的内容保留
+            reply = reply.replace(`[CQ:at,qq=${userId}]`, '');
 
-          // 后台执行指令
-          if (json.background) {
-            let res = '[系统操作]\n\n';
+            // 过滤掉 emoji 字符
+            reply = reply.replace(/\p{Emoji}/gu, '');
 
-            for (const item of ensureArray(json.command)) {
-              res += `指令 ${item} 的执行结果：\n${await qbot.command.invokeForLLM(item, userId)}\n\n`;
+            // 如果当前最新消息不是提问消息，则添加 reply
+            if (qbot.latestMessageId !== messageId) {
+              reply = `[CQ:reply,id=${messageId}] ${reply}`;
             }
 
-            messageList.push({ role: 'user', content: res });
+            // 避免发送空消息
+            if ((reply = reply.trim())) {
+              await qbot.sendGroupMessage(reply);
+            } else continue;
+
+            messageList.push(
+              { role: 'user', content: '[系统消息] 等待猫猫的下一步操作' } // 确保接口拿到的对话记录满足 assistant > user > assistant 顺序
+            );
           }
-          // 正常执行指令
-          else {
-            for (const item of ensureArray(json.command)) {
-              await qbot.command.invoke(item, userId);
+          // 为 command 时，执行系统指令
+          else if (currentAction.action === 'command') {
+            const commands = ensureArray(currentAction.command);
+            const { background = false } = currentAction;
+            let msg = '[系统消息]\n\n';
+
+            // 理论上不应出现数组为空的情况
+            if (!commands.length) continue;
+
+            for (const item of commands) {
+              const [success, result] = await qbot.command.invoke(item, userId, background);
+
+              msg += `指令 ${item} 的执行结果：\n${result}\n\n`;
             }
 
-            messageList.push({ role: 'user', content: '[系统消息] 指令执行完毕' });
+            messageList.push({ role: 'user', content: '[系统消息] 指令执行完毕\n\n' + msg });
           }
-        }
-        // 整理长期记忆
-        else if (json.action === 'memory') {
-          for (const item of json.delete || []) {
-            delete this.memory[item];
-          }
+          // 整理长期记忆
+          else if (currentAction.action === 'memory') {
+            for (const item of currentAction.delete || []) {
+              delete this.memory[item];
+            }
 
-          for (const [key, value] of json.create || []) {
-            this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
-          }
+            for (const [key, value] of currentAction.create || []) {
+              this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
+            }
 
-          this.saveMemory();
-          break; // 整理长期记忆后，结束循环
+            this.saveMemory();
+            continueLoop = false; // 整理长期记忆后，结束循环
+          }
         }
       }
     } catch (e) {
@@ -226,9 +241,18 @@ export class NekoAssist implements QBotPlugin {
     this.isReplying = false;
     this.replyingUserId = 0;
 
-    // 判断队列是否为空，继续执行后续任务
-    if (this.replyQueue.length > 0) {
-      const item = this.replyQueue.shift()!;
+    const queue = this.replyQueue;
+    const recentHistory = await qbot.getRecentHistory(10);
+
+    // 清理消息队列中过旧的消息（不在最近10条内的）
+    while (queue.length > 0 && !recentHistory.some(x => Number(x.message_id) === Number(queue[0].messageId))) {
+      queue.shift();
+    }
+
+    if (queue.length > 0) {
+      const item = queue.shift()!;
+
+      // v8 没有尾递归优化，消息过多时是否有爆栈可能？
       this.reply(item.userId, item.message, item.messageId, item.priority);
     }
   }
@@ -266,7 +290,9 @@ export class NekoAssist implements QBotPlugin {
     const queue = this.replyQueue;
 
     // 如果当前队列中存在此用户的优先级更高的消息，则忽略当前消息
-    if (queue.some(item => item.userId === userId && item.priority > priority)) return;
+    if (queue.some(item => (item.userId === userId && item.priority > priority) || item.messageId === messageId)) {
+      return;
+    }
 
     // 删除队列中相同 id 的其他消息
     for (let i = queue.length - 1; i >= 0; --i) {
@@ -282,5 +308,9 @@ export class NekoAssist implements QBotPlugin {
         break;
       }
     }
+
+    this.replyQueue = queue.filter(x => !!x); // 过滤掉可能的空数据
+    console.log('✅ 消息队列已更新');
+    console.dir(queue, { depth: null });
   }
 }
