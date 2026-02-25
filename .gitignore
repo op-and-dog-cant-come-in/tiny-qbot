@@ -3,6 +3,10 @@
 /history.json
 /memory.json
 /corn.json
+/jmpdf
+/jmstock
+/stock
 /*.db
 /*.db-shm
 /*.db-wal
+/log

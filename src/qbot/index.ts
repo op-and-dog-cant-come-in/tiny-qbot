@@ -231,7 +231,7 @@ export class QBot {
   }
 
   /** 向目标群组发送消息，并更新消息记录。返回发送的消息 id */
-  async sendGroupMessage(raw_message: string) {
+  async sendGroupMessage(raw_message: string): Promise<string> {
     const { message_id } = await this.naplink.sendGroupMessage(this.targetGroup, raw_message);
     const msg = await this.naplink.getMessage(message_id);
 

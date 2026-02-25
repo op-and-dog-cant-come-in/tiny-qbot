@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[oc]
+*.egg-info
+build/
+dist/
+wheels/
+
+# Virtual environments
+.venv
+/kuro-env
+uv.lock
+
+# Log files
+*.log
+kurolog.log
+
+# Configuration files
+*.cfg
+*.yaml
+push.ini
+
+# Data files
+cache
+data.json
+
+# Development tool configurations
+.vscode
+
+# Project specific directories
+/research
+static/pictures/
+static/tmp/

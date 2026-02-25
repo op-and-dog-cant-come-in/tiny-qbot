@@ -12,6 +12,7 @@ services:
       - 6099:6099
     volumes:
       - ./onebot11.json:/app/napcat/config/onebot11_<%= ACCOUNT %>.json
+      - ./jmpdf:/app/napcat/data/jmpdf
     container_name: napcat
     network_mode: bridge
     restart: always
