@@ -125,7 +125,7 @@ export class QBot {
 
       // 实际测试表明断连消息不一定发送成功，只是作为一种提醒方案
       if (data.toString().includes('[KickedOffLine]')) {
-        this.naplink.sendGroupMessage(this.targetGroup, '[CQ:at,qq=2548705244] 登录要失效了喵，赶紧重新登录喵');
+        this.naplink.sendGroupMessage(this.targetGroup, '登录要失效了喵，赶紧重新登录喵');
       }
     };
 
