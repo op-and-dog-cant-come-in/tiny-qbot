@@ -2,17 +2,24 @@ import { HttpClient } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface EpicFreeGame {
-  name: string;
-  original_price: string;
-  introduce: string;
-  end_time: string;
+  id: string;
+  title: string;
+  cover: string;
+  original_price: number;
+  original_price_desc: string;
+  description: string;
+  seller: string;
+  is_free_now: boolean;
+  free_start: string;
+  free_start_at: number;
+  free_end: string;
+  free_end_at: number;
+  link: string;
 }
 
 interface EpicFreeResponse {
-  code: number;
-  msg: string;
+  message: string;
   data: EpicFreeGame[];
-  api_source: string;
 }
 
 const client = new HttpClient();
@@ -34,7 +41,7 @@ export class EpicFree implements QBotPlugin {
 
   sendEpicFreeGames = async (params: CommandHandlerParams): Promise<string> => {
     const { silent = false } = params;
-    const [data, error] = await client.get<EpicFreeResponse>('https://api.milorapart.top/apis/free');
+    const [data, error] = await client.get<EpicFreeResponse>('https://uapis.cn/api/v1/game/epic-free');
 
     if (error) {
       const text = 'EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
@@ -44,13 +51,15 @@ export class EpicFree implements QBotPlugin {
       return text;
     }
 
-    let message = `🎮 ${data.msg}\n\n`;
+    let message = `🎮 ${data.message}\n\n`;
 
     for (const game of data.data) {
-      message += `📦 ${game.name}\n`;
-      message += `💰 原价: ${game.original_price}\n`;
-      message += `⏰ 截止: ${game.end_time}\n`;
-      message += `📝 介绍: ${game.introduce.substring(0, 100)}${game.introduce.length > 100 ? '...' : ''}\n\n`;
+      const coverUrl = game.cover.trim().replace(/`/g, '');
+      message += `📦 ${game.title}\n`;
+      message += `💰 原价: ${game.original_price_desc}\n`;
+      message += `⏰ 截止: ${game.free_end}\n`;
+      message += `📝 介绍: ${game.description.substring(0, 100)}${game.description.length > 100 ? '...' : ''}\n`;
+      message += `[CQ:image,file=${coverUrl}]\n\n`;
     }
 
     message = message.trim();
