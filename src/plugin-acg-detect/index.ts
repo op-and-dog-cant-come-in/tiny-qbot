@@ -96,10 +96,12 @@ export class ACGDetect implements QBotPlugin {
     let report: string[] = ['🎭 二次元角色识别结果：\n'];
 
     for (const item of data.results) {
-      if (!item.data.characters) continue;
+      const { material, characters, jp_name, eng_name } = item.data;
+
+      if (!material && !characters && !jp_name && !eng_name) continue;
 
       report.push(`相似度：${item.header.similarity}%`);
-      report.push(`${item.data.material || ''} ${item.data.characters}`);
+      report.push(`${material || ''} ${characters || ''} ${jp_name || eng_name || ''}`);
       report.push(`[CQ:image,file=${item.header.thumbnail}]\n`);
       report.push(item.data.ext_urls?.join('\n') || '');
     }
