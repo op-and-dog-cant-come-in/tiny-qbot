@@ -185,7 +185,7 @@ export class NekoAssist implements QBotPlugin {
             reply = reply.replace(`[CQ:at,qq=${userId}]`, '');
 
             // 过滤掉 emoji 字符
-            reply = reply.replace(/\p{Emoji}/gu, '');
+            // reply = reply.replace(/\p{Emoji}/gu, '');
 
             // 如果当前最新消息不是提问消息，则添加 reply
             if (qbot.latestMessageId !== messageId) {
