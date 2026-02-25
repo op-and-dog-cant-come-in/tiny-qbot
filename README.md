@@ -22,6 +22,10 @@ docker 的安装教程可参考：
 
 - volta 的安装教程可参考：[Volta 无痛的 JavaScript 工具管理器](https://zh.voltajs.com/)
 
+部分插件会使用 `uv` 命令执行一些 python 脚本，可参考这个文档安装下：
+
+- [安装 uv](https://uv.doczh.com/getting-started/installation/)
+
 准备好这两样后，到 `src\index.ts` 文件中填写必要的账号和 apiKey 等信息，然后通过以下命令启动项目：
 
 ```shell
