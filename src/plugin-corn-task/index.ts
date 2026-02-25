@@ -39,7 +39,7 @@ export class CornTask implements QBotPlugin {
       description:
         `/corn-create <name> <type> <time> <desc> 创建定时触发的任务，<name> 为唯一的任务名称字符串（不能包含空白字符），<desc> 为任务描述\n` +
         `当 <type> 为 at 时，表示创建一个在指定时间点触发的一次性定时任务，此时 <time> 为一个 ${CORN_TIME_FORMAT} 格式的时间字符串\n` +
-        `当 <type> 为 corn 时，表示创建一个周期性触发的定时任务，此时 <time> 为一个 node-schedule 支持的 corn 表达式（* * * * * * 格式）\n` +
+        `当 <type> 为 corn 时，表示创建一个周期性触发的定时任务，此时 <time> 为一个 node-schedule 支持的 corn 表达式（包含6个参数 秒 分 时 日 月 周）\n` +
         `一些复杂的定时任务可通过在任务描述中递归创建定时任务实现，请确保任务描述足够详细，猫猫将仅根据描述内容完成任务`,
       handler: this.handleCornCreate,
     });
