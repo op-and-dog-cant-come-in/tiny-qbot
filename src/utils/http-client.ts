@@ -27,12 +27,6 @@ export class HttpClient {
             body: JSON.stringify(data),
           });
 
-          this.debugInfo(`🌐✅ 收到响应头 GET ${this.baseUrl + path}`, {
-            status: res.status,
-            statusText: res.statusText,
-            headers: res.headers,
-          });
-
           // 判断状态码是否为 200~299
           if (!res.ok) {
             this.debugInfo(`🌐❌ 错误的状态码 POST ${this.baseUrl + path}`, res.status, res.statusText);
@@ -53,7 +47,12 @@ export class HttpClient {
             content = await res.text();
           }
 
-          this.debugInfo(`🌐✅ 收到响应体 POST ${this.baseUrl + path}`, content);
+          this.debugInfo(`🌐✅ 收到响应 POST ${this.baseUrl + path}`, {
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+            content,
+          });
 
           return [content as U, null, res];
         } catch (e) {
