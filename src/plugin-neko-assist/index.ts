@@ -35,6 +35,9 @@ export class NekoAssist implements QBotPlugin {
   /** 当前 reply 函数正在回复的 user_id */
   replyingUserId: number = 0;
 
+  /** 最近一次回复的消息 id */
+  lastReplyMessageId: number = 0;
+
   /**
    * 在 reply 期间收到的可能需要回复的新消息先暂存在这里
    * 处理逻辑为 @ 机器人的消息优先级最高，消息中包含关键词的次之，其余消息优先级最低
@@ -118,13 +121,24 @@ export class NekoAssist implements QBotPlugin {
     // 如果当前正在 reply 的话，则先把消息加入队列，等待后续处理
     if (this.isReplying) {
       this.queueMessage(userId, message, messageId, priority);
+      console.log(`✅ NekoAssist 加入队列 ${userId} ${messageId} ${priority} ${message}`);
       return;
     }
 
     // 没有其他 reply() 函数在执行的话就直接开始回复当前消息
     try {
+      // 先设置 isReplying 为 true，防止并发调用
       this.isReplying = true;
       this.replyingUserId = userId;
+
+      // 检查是否已经回复过此消息
+      if (this.lastReplyMessageId === messageId) {
+        console.log(`⚠️ NekoAssist 跳过重复消息 ${messageId} ${message}`);
+        return;
+      }
+
+      // 记录本次回复的消息 ID
+      this.lastReplyMessageId = messageId;
 
       const messageList: AIMessageItem[] = [
         // 如果是定时任务等系统消息（id 为 0），则不添加历史消息记录
@@ -224,7 +238,9 @@ export class NekoAssist implements QBotPlugin {
               delete this.memory[item];
             }
 
-            for (const [key, value] of currentAction.create || []) {
+            for (let [key, value] of currentAction.create || []) {
+              // ai 可能自己加上日期头，我们删除它仅保留系统生成的
+              value = value.replace(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}\s/, '');
               this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
             }
 
@@ -236,11 +252,13 @@ export class NekoAssist implements QBotPlugin {
     } catch (e) {
       console.log('❌ in NekoAssist.reply():', e);
       await qbot.sendGroupMessage(`程序出错了喵\n${e.toString()}`);
+    } finally {
+      // 无论是否出错，都要重置状态
+      this.isReplying = false;
+      this.replyingUserId = 0;
     }
 
-    this.isReplying = false;
-    this.replyingUserId = 0;
-
+    // 处理队列中的下一条消息
     const queue = this.replyQueue;
     const recentHistory = await qbot.getRecentHistory(10);
 
@@ -251,8 +269,7 @@ export class NekoAssist implements QBotPlugin {
 
     if (queue.length > 0) {
       const item = queue.shift()!;
-
-      // v8 没有尾递归优化，消息过多时是否有爆栈可能？
+      // 直接调用 reply 处理下一条消息
       this.reply(item.userId, item.message, item.messageId, item.priority);
     }
   }
@@ -302,12 +319,15 @@ export class NekoAssist implements QBotPlugin {
     }
 
     // 找到第一个优先级小于当前消息的位置，插入消息记录
-    for (let i = 0; i <= queue.length; ++i) {
-      if (queue[i].priority < priority || i === queue.length) {
-        queue.splice(i, 0, { userId, message, messageId, priority });
+    let insertIndex = queue.length;
+
+    for (let i = 0; i < queue.length; ++i) {
+      if (queue[i].priority < priority) {
+        insertIndex = i;
         break;
       }
     }
+    queue.splice(insertIndex, 0, { userId, message, messageId, priority });
 
     this.replyQueue = queue.filter(x => !!x); // 过滤掉可能的空数据
     console.log('✅ 消息队列已更新');
