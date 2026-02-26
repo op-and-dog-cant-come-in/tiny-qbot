@@ -240,7 +240,7 @@ export class NekoAssist implements QBotPlugin {
 
             for (let [key, value] of currentAction.create || []) {
               // ai 可能自己加上日期头，我们删除它仅保留系统生成的
-              value = value.replace(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}\s/, '');
+              value = value.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s/, '');
               this.memory[key] = `[${dayjs().format('YYYY-MM-DD HH:mm')}] ${value}`;
             }
 
