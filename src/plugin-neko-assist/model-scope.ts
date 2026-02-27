@@ -7,6 +7,7 @@ const models = [
   'ZhipuAI/GLM-5',
   'ZhipuAI/GLM-4.6:ZhipuAI',
   'ZhipuAI/GLM-4.5:ZhipuAI',
+  'Qwen/Qwen3.5-397B-A17B',
   'MiniMax/MiniMax-M2.5',
   'ZhipuAI/GLM-4.7-Flash',
   'Qwen/Qwen3-235B-A22B',
