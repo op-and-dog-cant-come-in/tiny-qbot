@@ -1,5 +1,5 @@
-import { HttpClient } from '../src/utils/http-client.ts';
-import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../src/qbot/index.ts';
+import { HttpClient } from '../utils/http-client.ts';
+import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface WeatherForecastItem {
   date: string;
@@ -40,7 +40,7 @@ export class WeatherForcast implements QBotPlugin {
     qbot.command.register({
       name: '天气',
       alias: ['weather'],
-      description: '/天气 <城市> 查询指定城市今天开始未来七天的天气',
+      description: '/天气 <城市> 查询指定城市今天开始未来七天的天气，需填写完整的省市，例如 /天气 陕西省西安市',
       handler: this.sendWeatherForecast,
     });
   };
