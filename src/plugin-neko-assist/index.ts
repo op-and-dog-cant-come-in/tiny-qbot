@@ -131,8 +131,8 @@ export class NekoAssist implements QBotPlugin {
       this.isReplying = true;
       this.replyingUserId = userId;
 
-      // 检查是否已经回复过此消息
-      if (this.lastReplyMessageId === messageId) {
+      // 检查是否已经回复过此消息，id 为 0 表示为系统消息，重复是正常的
+      if (messageId > 0 && this.lastReplyMessageId === messageId) {
         console.log(`⚠️ NekoAssist 跳过重复消息 ${messageId} ${message}`);
         return;
       }
