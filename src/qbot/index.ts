@@ -180,7 +180,7 @@ export class QBot {
     // });
 
     await client.connect();
-    await client.sendGroupMessage(this.targetGroup, '猫猫上线了喵');
+    // await client.sendGroupMessage(this.targetGroup, '猫猫上线了喵');
 
     // 初始化插件
     await Promise.all(
@@ -218,11 +218,12 @@ export class QBot {
     await this.db.runTask(params);
   }
 
-  /** 获取最近的 n 条记录，新发的消息在前 */
-  async getRecentHistory(count: number): Promise<MessageRecord[]> {
+  /** 获取最近的第 start 到第 end 条记录（左闭右开区间），新发的消息在前 */
+  async getRecentHistory(start: number, end: number): Promise<MessageRecord[]> {
     const params: GetRecentHistoryParams = {
       type: 'get-recent-history',
-      recent: count,
+      start,
+      end,
     };
 
     const result = await this.db.runTask(params);

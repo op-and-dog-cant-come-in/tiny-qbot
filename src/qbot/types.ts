@@ -22,13 +22,16 @@ export interface AddHistoryParams {
   rawMessage: string;
 }
 
-/** 读取最近的 n 条消息记录的参数格式 */
+/** 读取最近的第 start 到第 end 条消息记录的参数格式 */
 export interface GetRecentHistoryParams {
   /** 任务类型 */
   type: 'get-recent-history';
 
-  /** 要读取的消息记录数量 */
-  recent: number;
+  /** 起始索引（左闭） */
+  start: number;
+
+  /** 结束索引（右开） */
+  end: number;
 }
 
 /** 消息记录格式 */

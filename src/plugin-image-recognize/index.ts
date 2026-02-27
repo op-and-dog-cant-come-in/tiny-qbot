@@ -45,7 +45,7 @@ export class ImageRecognize implements QBotPlugin {
       // 当前消息没有提供图片的话，尝试使用上两条消息再试一次
       if (!imageUrl) {
         // 找出最近 5 条消息中发送者的消息的前两条进行尝试
-        const [prev1, prev2] = (await this.qbot.getRecentHistory(5)).filter(
+        const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(
           item => Number(item.sender) === params.sender
         );
         imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');

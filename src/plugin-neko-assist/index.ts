@@ -79,6 +79,40 @@ export class NekoAssist implements QBotPlugin {
         return memory;
       },
     });
+
+    qbot.command.register({
+      name: 'recent',
+      alias: ['历史消息'],
+      description:
+        '获取最近的第 start 到 end 条历史消息，格式：/recent <start> <end>（左闭右开区间），该指令仅供猫猫后台使用',
+      handler: async params => {
+        const { params: args, silent } = params;
+        const [startStr, endStr] = args?.split(' ') || [];
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+
+        if (isNaN(start) || isNaN(end) || start < 0 || end <= start) {
+          const errorMsg = '参数格式错误，请使用：/recent <start> <end>，其中 start 和 end 为非负整数，且 end > start';
+          !silent && (await qbot.sendGroupMessage(errorMsg));
+          return errorMsg;
+        }
+
+        try {
+          const recentHistory = await qbot.getRecentHistory(start, end);
+          const historyStr = recentHistory
+            .map(item => {
+              return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
+            })
+            .join('\n');
+
+          const result = historyStr || '未找到历史消息';
+
+          return result;
+        } catch (e) {
+          return `获取历史消息失败：${e.toString()}`;
+        }
+      },
+    });
   };
 
   onGroupMessage = async (data: GroupMessageEvent) => {
@@ -260,7 +294,7 @@ export class NekoAssist implements QBotPlugin {
 
     // 处理队列中的下一条消息
     const queue = this.replyQueue;
-    const recentHistory = await qbot.getRecentHistory(10);
+    const recentHistory = await qbot.getRecentHistory(0, 10);
 
     // 清理消息队列中过旧的消息（不在最近10条内的）
     while (queue.length > 0 && !recentHistory.some(x => Number(x.message_id) === Number(queue[0].messageId))) {
@@ -280,7 +314,7 @@ export class NekoAssist implements QBotPlugin {
     const currentTime = dayjs().format('YYYY-MM-DD HH:mm');
 
     const recentHistory = need_history
-      ? (await qbot.getRecentHistory(15))
+      ? (await qbot.getRecentHistory(0, 15))
           .map(item => {
             return `${item.message_id} ${dayjs(item.timestamp * 1000).format('YYYY-MM-DD HH:mm')} ${item.sender} ${item.raw_message}`;
           })

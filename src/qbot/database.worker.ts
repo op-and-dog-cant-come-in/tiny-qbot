@@ -28,9 +28,9 @@ const ADD_HISTORY_STMT = db.prepare(
   `INSERT INTO messages (sender, raw_message, timestamp, message_id) VALUES (?, ?, ?, ?)`
 );
 
-/** 读取最近的 n 条消息记录的语句 */
+/** 读取最近的第 start 到第 end 条消息记录的语句 */
 const GET_RECENT_HISTORY_STMT = db.prepare(
-  `SELECT message_id, sender, raw_message, timestamp FROM messages ORDER BY timestamp DESC, id DESC LIMIT ?`
+  `SELECT message_id, sender, raw_message, timestamp FROM messages ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?`
 );
 
 type TaskId = { taskId: number };
@@ -42,9 +42,11 @@ const handlerMap: Record<string, (params: Params) => WorkerTaskResult> = {
     ADD_HISTORY_STMT.run(params.sender, params.rawMessage, params.timeStamp, params.messageId);
     return { taskId: params.taskId, success: true };
   },
-  // 读取最近的 n 条消息记录
+  // 读取最近的第 start 到第 end 条消息记录
   'get-recent-history': (params: GetRecentHistoryParams & TaskId) => {
-    const records = GET_RECENT_HISTORY_STMT.all(params.recent);
+    const limit = params.end - params.start;
+    const offset = params.start;
+    const records = GET_RECENT_HISTORY_STMT.all(limit, offset);
     return { taskId: params.taskId, success: true, result: records };
   },
 };
