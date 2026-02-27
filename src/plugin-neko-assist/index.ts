@@ -325,10 +325,14 @@ export class NekoAssist implements QBotPlugin {
       .map(cmd => cmd.description)
       .join('\n');
 
+    const memory = Object.entries(this.memory)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+
     return this.systemPrompts
       .replace('<%= ACCOUNT %>', qbot.account)
       .replace('<%= COMMANDS %>', commandsDescription)
-      .replace('<%= MEMORY %>', JSON.stringify(this.memory))
+      .replace('<%= MEMORY %>', memory)
       .replace('<%= HISTORY %>', recentHistory)
       .replace('<%= CURRENT_TIME %>', currentTime);
   }
