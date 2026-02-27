@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface HotboardItem {
@@ -24,8 +24,6 @@ interface HotboardResponse {
   }>;
   sources?: string[];
 }
-
-const client = new HttpClient();
 
 const SOURCE_MAP: Record<string, string> = {
   bilibili: '哔哩哔哩弹幕网',

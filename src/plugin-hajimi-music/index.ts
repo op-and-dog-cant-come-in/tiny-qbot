@@ -1,7 +1,5 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
-
-const client = new HttpClient();
 
 export class HajimiMusic implements QBotPlugin {
   name = 'hajimi-music';

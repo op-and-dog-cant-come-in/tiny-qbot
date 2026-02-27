@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 const SPEAKERS = [
@@ -189,8 +189,6 @@ const SPEAKERS = [
 ];
 
 const DEFAULT_SPEAKER = '病娇少女';
-
-const client = new HttpClient();
 
 export class AITTS implements QBotPlugin {
   name = 'ai-tts';

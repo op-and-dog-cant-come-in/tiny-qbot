@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface WeatherForecastItem {
@@ -27,8 +27,6 @@ interface WeatherResponse {
   temp_min: number;
   forecast: WeatherForecastItem[];
 }
-
-const client = new HttpClient();
 
 export class WeatherForcast implements QBotPlugin {
   name = 'weather-forcast';

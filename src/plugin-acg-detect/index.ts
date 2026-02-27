@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/index.ts';
+import { client } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface SauceNAOResult {
@@ -20,8 +20,6 @@ interface SauceNAOResponse {
   };
   results: SauceNAOResult[];
 }
-
-const client = new HttpClient();
 
 export class ACGDetect implements QBotPlugin {
   name = 'acg-detect';

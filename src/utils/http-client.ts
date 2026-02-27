@@ -159,3 +159,5 @@ export interface RequestOptions {
 }
 
 export type RequestResult<T> = [T, Error | null, Response];
+
+export const client = new HttpClient();

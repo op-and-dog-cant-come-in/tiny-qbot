@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type AIClient, type AIMessageItem } from '../ai-client.ts';
 
 const models = [
@@ -15,8 +15,6 @@ const models = [
   'Qwen/Qwen3-Coder-480B-A35B-Instruct',
   'MiniMax/MiniMax-M1-80k',
 ];
-
-const client = new HttpClient();
 
 export class ModelScope implements AIClient {
   apiKey: string;

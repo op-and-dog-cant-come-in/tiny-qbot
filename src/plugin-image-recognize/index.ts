@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/index.ts';
+import { client } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface ImageRecognizeResponse {
@@ -7,8 +7,6 @@ interface ImageRecognizeResponse {
   result: string;
   api_source: string;
 }
-
-const client = new HttpClient();
 
 export class ImageRecognize implements QBotPlugin {
   name = 'image-recognize';

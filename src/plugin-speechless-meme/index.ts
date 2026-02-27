@@ -9,7 +9,8 @@ export class SpeechlessMeme implements QBotPlugin {
 
     qbot.command.register({
       name: '求求',
-      description: '/求求 <文本1> <文本2> 生成一张表情包图片，内容为 "你们怎么不说话，是不是在<文本1>，求求你们不要再<文本2>了"',
+      description:
+        '/求求 <文本1> <文本2> 生成一张表情包图片，内容为 "你们怎么不说话，是不是在<文本1>，求求你们不要再<文本2>了，其中文本2可省略"',
       handler: this.sendSpeechlessMeme,
     });
   };
@@ -19,7 +20,7 @@ export class SpeechlessMeme implements QBotPlugin {
 
     try {
       const args = params.params.trim().split(/\s+/);
-      const [topText = '', bottomText = topText] = args;
+      const [topText = '玩原神', bottomText = `不要再${topText}了`] = args;
 
       const response = await fetch('https://uapis.cn/api/v1/image/speechless', {
         method: 'POST',

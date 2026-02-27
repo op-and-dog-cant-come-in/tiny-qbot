@@ -1,9 +1,5 @@
-import path from 'node:path';
 import { execa } from 'execa';
-import { HttpClient } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
-
-const client = new HttpClient();
 
 export class JMComic implements QBotPlugin {
   name = 'jmcomic';

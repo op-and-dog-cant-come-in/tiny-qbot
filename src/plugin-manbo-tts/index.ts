@@ -1,7 +1,5 @@
-import { HttpClient } from '../utils/index.ts';
+import { client } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
-
-const client = new HttpClient();
 
 export class ManboTTS implements QBotPlugin {
   name = 'manbo-tts';

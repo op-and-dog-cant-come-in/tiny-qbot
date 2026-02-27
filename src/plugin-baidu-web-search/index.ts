@@ -1,4 +1,4 @@
-import { HttpClient } from '../utils/http-client.ts';
+import { client } from '../utils/http-client.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface BaiduSearchMessage {
@@ -39,10 +39,6 @@ interface BaiduSearchResponse {
   references: BaiduSearchReference[];
 }
 
-const BAIDU_API_URL = 'https://qianfan.baidubce.com';
-
-const client = new HttpClient({ baseUrl: BAIDU_API_URL });
-
 export class BaiduWebSearch implements QBotPlugin {
   name = 'baidu-web-search';
   qbot: QBot;
@@ -74,7 +70,7 @@ export class BaiduWebSearch implements QBotPlugin {
     }
 
     const [data, error] = await client.post<BaiduSearchRequest, BaiduSearchResponse>(
-      '/v2/ai_search/chat/completions',
+      'https://qianfan.baidubce.com/v2/ai_search/chat/completions',
       {
         messages: [{ content: query, role: 'user' }],
         stream: false,
