@@ -7,7 +7,6 @@ const models = [
   'ZhipuAI/GLM-5',
   'ZhipuAI/GLM-4.6:ZhipuAI',
   'ZhipuAI/GLM-4.5:ZhipuAI',
-  'Qwen/Qwen3.5-397B-A17B',
   'MiniMax/MiniMax-M2.5',
   'ZhipuAI/GLM-4.7-Flash',
   'Qwen/Qwen3-235B-A22B',
@@ -25,44 +24,48 @@ export class ModelScope implements AIClient {
   }
 
   async chat(messages: AIMessageItem[]): Promise<[boolean, string]> {
-    let loop = true;
+    try {
+      let loop = true;
 
-    while (loop) {
-      const [data, error, res] = await client.post(
-        'https://api-inference.modelscope.cn/v1/chat/completions',
-        {
-          model: this.currentModel,
-          messages,
-          stream: false,
-          // enable_thinking: false,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
+      while (loop) {
+        const [data, error, res] = await client.post(
+          'https://api-inference.modelscope.cn/v1/chat/completions',
+          {
+            model: this.currentModel,
+            messages,
+            stream: false,
+            // enable_thinking: false,
           },
-        }
-      );
+          {
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-      if (!error) {
-        const choice = data.choices?.[0];
-        return [true, choice.message.content || choice.delta.content || ''];
-      }
-
-      // 如果是 429 报错，则更换模型重新请求
-      if (res.status === 429) {
-        console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
-        this.currentModel = models[models.indexOf(this.currentModel) + 1];
-
-        if (!this.currentModel) {
-          return [false, '模型额度用完了喵，没法回复了喵'];
+        if (!error) {
+          const choice = data.choices?.[0];
+          return [true, choice.message.content || choice.delta.content || ''];
         }
 
-        continue;
-      }
+        // 如果是 429 报错，则更换模型重新请求
+        if (res.status === 429) {
+          console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
+          this.currentModel = models[models.indexOf(this.currentModel) + 1];
 
-      // 服务器错误
-      return [false, error.toString()];
+          if (!this.currentModel) {
+            return [false, '模型额度用完了喵，没法回复了喵'];
+          }
+
+          continue;
+        }
+
+        // 服务器错误
+        return [false, error.toString()];
+      }
+    } catch (e) {
+      return [false, e.toString()];
     }
   }
 }
