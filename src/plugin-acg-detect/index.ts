@@ -37,7 +37,7 @@ export class ACGDetect implements QBotPlugin {
 
     qbot.command.register({
       name: 'acg-detect',
-      description: '/acg-detect <图片> 使用SauceNAO识别二次元角色，图片为 [CQ:image,file=...] 格式',
+      description: '/acg-detect <图片> 使用SauceNAO识别二次元角色，图片为 CQ 命令格式',
       handler: this.detectACG,
     });
   };
