@@ -112,6 +112,42 @@ pnpm dev
 
 内部实现中使用 `http://api.ocoa.cn/api/hjm.php` 接口获取音乐链接。
 
+## acg-detect
+
+使用 SauceNAO 识别二次元角色，提供如下指令：
+
+- `/acg-detect <图片>`：使用 SauceNAO 识别二次元角色，图片为 CQ 命令格式
+
+如果当前消息没有提供图片，会尝试从最近 5 条消息中查找发送者的图片。
+
+内部实现中使用 SauceNAO API 实现图片识别功能。
+
+## hotboard
+
+查询各类热榜信息，提供如下指令：
+
+- `/热榜 <来源>`：查询指定来源的热榜信息，来源可选值包括：
+  - `bilibili` - 哔哩哔哩弹幕网
+  - `weibo` - 新浪微博热搜
+  - `zhihu` - 知乎热榜
+  - `douyin` - 抖音热榜
+  - `tieba` - 百度贴吧热帖
+  - `hupu` - 虎扑热帖
+  - `ngabbs` - NGA游戏论坛热帖
+  - `thepaper` - 澎湃新闻热榜
+  - `toutiao` - 今日头条热榜
+  - `lol` - 英雄联盟热帖
+  - `genshin` - 原神热帖
+  - `honkai` - 崩坏3热帖
+  - `starrail` - 星穹铁道热榜
+  - `netease-music` - 网易云音乐热歌榜
+  - `qq-music` - QQ音乐热歌榜
+  - `weatheralarm` - 天气预警信息
+  - `earthquake` - 地震速报
+  - `history` - 历史上的今天
+
+内部实现中使用免费的 `https://api.milorapart.top/apis/hotboard` 接口获取热榜信息。
+
 ## image-recognize
 
 使用 AI 识别图片内容，以文本形式描述，提供如下指令：
@@ -120,7 +156,7 @@ pnpm dev
 
 如果当前消息没有提供图片，会尝试从最近 5 条消息中查找发送者的图片。
 
-内部实现中使用 `https://api.milorapart.top/apis/airecognizeimg` 接口实现图片识别功能。
+内部实现中使用魔搭平台的多模态模型（如 Kimi-K2.5、Qwen3.5）实现图片识别功能。
 
 ## jmcomic
 
@@ -153,3 +189,27 @@ pnpm dev
 - `/曼波 <文本内容>`：将文本转换为曼波语音发送
 
 内部实现中使用 `https://api.milorapart.top/apis/mbAIsc` 接口实现语音生成功能。
+
+## momotou
+
+生成摸摸头 GIF 表情包，提供如下指令：
+
+- `/摸摸头 <qq号>`：生成一张摸摸指定用户头像的 gif 动画，注意参数是被摸头的人
+
+内部实现中使用 `https://uapis.cn/api/v1/image/motou` 接口生成图片。
+
+## speechless-meme
+
+生成"你们怎么不说话"表情包，提供如下指令：
+
+- `/求求 <文本1> <文本2>`：生成一张表情包图片，内容为 "你们怎么不说话，是不是在<文本1>，求求你们不要再<文本2>了"，其中文本2可省略
+
+内部实现中使用 `https://uapis.cn/api/v1/image/speechless` 接口生成图片。
+
+## weather
+
+查询天气预报，提供如下指令：
+
+- `/天气 <城市>`：查询指定城市今天开始未来七天的天气，需填写完整的省市，例如 `/天气 陕西省西安市`
+
+内部实现中使用 `https://api.milorapart.top/apis/weather` 接口获取天气信息。
