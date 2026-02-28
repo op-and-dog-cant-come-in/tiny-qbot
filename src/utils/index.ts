@@ -91,5 +91,13 @@ export const replaceAllAsync = async (
 
 export const ensureArray = <T>(arr: T | T[]) => (Array.isArray(arr) ? arr : [arr]);
 
+/** 将用户 id，群组 id，消息 id 等 id 统一转换为字符串形式，并去掉可能存在的小数部分 */
+export const ensureStringId = (id: number | string) => String(id).split('.')[0];
+
+/** 生成一个随机的整数 */
+export const randomInt = () => {
+  return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+};
+
 export * from './worker.ts';
 export * from './http-client.ts';

@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { randomInt } from './index.ts';
 
 /** worker 线程返回数据需要满足的格式，可在此基础上扩展其他字段 */
 export interface WorkerTaskResult {
@@ -54,7 +55,7 @@ export class WorkerScheduler {
 
     // 确保任务 id 不重复
     do {
-      taskId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+      taskId = randomInt();
     } while (this.taskMap.has(taskId));
 
     (params as any).taskId = taskId;

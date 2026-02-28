@@ -1,10 +1,10 @@
-import { type GroupMessageEvent } from '@naplink/naplink';
+import { type GroupMessageEvent, type PokeNotice } from '@naplink/naplink';
 import fs from 'fs-extra';
 import { jsonrepair } from 'jsonrepair';
 import dayjs from 'dayjs';
 import { type AIClient, type AIMessageItem } from '../ai-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
-import { debounce, ensureArray, tryReadJson } from '../utils/index.ts';
+import { debounce, ensureArray, ensureStringId, tryReadJson } from '../utils/index.ts';
 import { VolcesArk } from './volces-ark.ts';
 import { ModelScope } from './model-scope.ts';
 
@@ -33,10 +33,10 @@ export class NekoAssist implements QBotPlugin {
   isReplying = false;
 
   /** 当前 reply 函数正在回复的 user_id */
-  replyingUserId: number = 0;
+  replyingUserId: string = '';
 
   /** 最近一次回复的消息 id */
-  lastReplyMessageId: number = 0;
+  lastReplyMessageId: string = '';
 
   /**
    * 在 reply 期间收到的可能需要回复的新消息先暂存在这里
@@ -44,7 +44,7 @@ export class NekoAssist implements QBotPlugin {
    * 同一个用户 id 只会保留优先级最高的消息中最新的哪一条
    * 每次处理时优先选出优先级最高的消息中最早的那一条进行处理
    */
-  replyQueue: { userId: number; message: string; messageId: number; priority: number }[] = [];
+  replyQueue: { userId: string; message: string; messageId: string; priority: number }[] = [];
 
   constructor(options: NekoAssistInitOptions) {
     // this.aiClient = new VolcesArk(options.apiKey);
@@ -117,40 +117,58 @@ export class NekoAssist implements QBotPlugin {
 
   onGroupMessage = async (data: GroupMessageEvent) => {
     const message = data.raw_message;
-    const messageId = Number(data.message_id);
+    const messageId = ensureStringId(data.message_id);
+    const senderId = ensureStringId(data.user_id);
 
+    // 自己发送的消息
+    if (senderId === this.qbot.account) {
+      // id 以 corn: 开头表示为定时任务，这是唯一需要处理的自己发送的消息
+      if (messageId.startsWith('corn:')) {
+        await this.reply(senderId, message, messageId, 100);
+      }
+    }
     // 直接 @ 机器人的优先级最高
-    if (message.includes(`[CQ:at,qq=${this.qbot.account}]`)) {
-      await this.reply(data.user_id, message, messageId, 100);
+    else if (message.includes(`[CQ:at,qq=${this.qbot.account}]`)) {
+      await this.reply(senderId, message, messageId, 100);
     }
     // 包含关键词的优先级次之
     else if (message.includes('猫猫')) {
-      await this.reply(data.user_id, message, messageId, 50);
+      await this.reply(senderId, message, messageId, 50);
     } else if (message.includes('猫')) {
-      await this.reply(data.user_id, message, messageId, 10);
+      await this.reply(senderId, message, messageId, 10);
     }
     // 其他消息优先级最低，且保持 5s 后仍是最新消息时再处理
-    else if (data.message.some(item => item.type === 'text' && item.data.text.trim())) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
+    else {
+      // 等待 15s 后再处理，避免连续发送消息的场景
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
       if (this.qbot.latestMessageId === messageId) {
-        await this.reply(data.user_id, message, messageId, 0);
+        await this.reply(senderId, message, messageId, 0);
       }
     }
   };
 
-  onPoke = async (data: GroupMessageEvent) => {
-    await this.reply(data.user_id, `${data.user_id} 戳了戳了猫猫`, data.message_id, 1);
+  onPoke = async (data: PokeNotice, messageId: string, message: string, fromUserId: string, toUserId: string) => {
+    // 如果是戳猫猫的话，则立即回复，
+    if (toUserId === this.qbot.account) {
+      await this.reply(fromUserId, message, messageId, 1);
+    }
+    // 如果是戳别人的话，在 15s 内没有其他消息的话才回复
+    else {
+      await new Promise(resolve => setTimeout(resolve, 15000));
+
+      if (this.qbot.latestMessageId === messageId) {
+        await this.reply(fromUserId, message, messageId, 1);
+      }
+    }
   };
 
   /**
    * 通过群消息或戳一戳触发的 llm 回复操作
    * 同一时间是会进行一个 reply 操作，其余的消息先暂存在 replyQueue 中等待后续处理
    */
-  async reply(userId: number, message: string, messageId: number, priority: number) {
+  async reply(userId: string, message: string, messageId: string, priority: number) {
     const { qbot } = this;
-
-    userId = Number(userId);
 
     // 如果当前正在 reply 的话，则先把消息加入队列，等待后续处理
     if (this.isReplying) {
@@ -166,7 +184,7 @@ export class NekoAssist implements QBotPlugin {
       this.replyingUserId = userId;
 
       // 检查是否已经回复过此消息，id 为 0 表示为系统消息，重复是正常的
-      if (messageId > 0 && this.lastReplyMessageId === messageId) {
+      if (this.lastReplyMessageId === messageId) {
         console.log(`⚠️ NekoAssist 跳过重复消息 ${messageId} ${message}`);
         return;
       }
@@ -175,8 +193,8 @@ export class NekoAssist implements QBotPlugin {
       this.lastReplyMessageId = messageId;
 
       const messageList: AIMessageItem[] = [
-        // 如果是定时任务等系统消息（id 为 0），则不添加历史消息记录
-        { role: 'system', content: await this.generateSystemPrompt(Number(messageId) !== 0) },
+        // 如果是定时任务等系统消息，则不添加历史消息记录
+        { role: 'system', content: await this.generateSystemPrompt(!messageId.startsWith('corn:')) },
         { role: 'user', content: `[系统提示] 请猫猫回复 id 为 ${messageId} 的消息：${message}` },
       ];
 
@@ -287,9 +305,12 @@ export class NekoAssist implements QBotPlugin {
       console.log('❌ in NekoAssist.reply():', e);
       await qbot.sendGroupMessage(`程序出错了喵\n${e.toString()}`);
     } finally {
+      // 故意降低机器人的回复频率
+      // await new Promise(resolve => setTimeout(resolve, 1500));
+
       // 无论是否出错，都要重置状态
       this.isReplying = false;
-      this.replyingUserId = 0;
+      this.replyingUserId = '';
     }
 
     // 处理队列中的下一条消息
@@ -297,7 +318,7 @@ export class NekoAssist implements QBotPlugin {
     const recentHistory = await qbot.getRecentHistory(0, 10);
 
     // 清理消息队列中过旧的消息（不在最近10条内的）
-    while (queue.length > 0 && !recentHistory.some(x => Number(x.message_id) === Number(queue[0].messageId))) {
+    while (queue.length > 0 && !recentHistory.some(x => x.message_id === queue[0].messageId)) {
       queue.shift();
     }
 
@@ -338,7 +359,7 @@ export class NekoAssist implements QBotPlugin {
   }
 
   /** 向 this.replyQueue 中添加一条新消息 */
-  queueMessage(userId: number, message: string, messageId: number, priority: number) {
+  queueMessage(userId: string, message: string, messageId: string, priority: number) {
     // 不处理当前正在回复用户的新消息
     if (userId === this.replyingUserId) return;
 

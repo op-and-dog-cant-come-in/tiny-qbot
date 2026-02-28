@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import schedule from 'node-schedule';
 
-import { debounce } from '../utils/index.ts';
+import { debounce, randomInt } from '../utils/index.ts';
 import type { CommandHandlerParams, QBot, QBotPlugin } from '../qbot/index.ts';
 import dayjs from 'dayjs';
 import { SystemMessage } from '../qbot/system-message.ts';
@@ -142,7 +142,8 @@ export class CornTask implements QBotPlugin {
       // 发送一条 at 猫猫的消息触发回复
       qbot.invokeGroupMessage(
         new SystemMessage({
-          group_id: qbot.targetGroup,
+          messageId: 'corn:' + randomInt(),
+          groupId: qbot.targetGroup,
           account: qbot.account,
           rawMessage: `[CQ:at,qq=${this.qbot.account}] [系统消息][定时任务触发 ${name}] 猫猫需执行以下任务：\n${desc}`,
         })

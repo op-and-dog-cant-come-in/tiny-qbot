@@ -59,7 +59,7 @@ export class ACGDetect implements QBotPlugin {
 
     if (!imageUrl) {
       const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(
-        item => Number(item.sender) === params.sender
+        item => item.sender === params.sender
       );
 
       imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');

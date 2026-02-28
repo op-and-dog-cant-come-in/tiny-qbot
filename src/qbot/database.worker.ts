@@ -2,7 +2,7 @@
 
 import { parentPort, workerData } from 'worker_threads';
 import { DatabaseSync } from 'node:sqlite';
-import type { WorkerTaskResult } from 'src/utils/worker.ts';
+import type { WorkerTaskResult } from '../utils/worker.ts';
 import type { AddHistoryParams, DatabaseWorkerData, GetRecentHistoryParams } from './types.ts';
 
 // 将数据保存在 {群号}.db 文件中

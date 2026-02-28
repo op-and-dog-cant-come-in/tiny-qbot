@@ -2,10 +2,10 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import fs from 'fs-extra';
-import NapLink, { type GroupMessageEvent } from '@naplink/naplink';
+import NapLink, { type GroupMessageEvent, type PokeNotice } from '@naplink/naplink';
 import getPort from 'get-port';
 import { execa } from 'execa';
-import { WorkerScheduler } from '../utils/index.ts';
+import { ensureStringId, WorkerScheduler } from '../utils/index.ts';
 import type { AddHistoryParams, GetRecentHistoryParams, MessageRecord } from './types.ts';
 import type { SystemMessage } from './system-message.ts';
 
@@ -31,7 +31,7 @@ export class QBot {
   db: WorkerScheduler;
 
   /** 记录最新一条群消息的 id */
-  latestMessageId = 0;
+  latestMessageId: string = '';
 
   constructor(options: QBotInitOptions) {
     this.account = options.account;
@@ -72,7 +72,7 @@ export class QBot {
     },
 
     /** 执行一条指令，返回 [是否成功执行指令, 指令的执行结果] */
-    invoke: async (command: string, sender: number, silent = false): Promise<[boolean, string]> => {
+    invoke: async (command: string, sender: string, silent = false): Promise<[boolean, string]> => {
       try {
         // 有时 ai 会忘记填写 command 字段，这里做下容错
         if (!command) return [false, '指令为空，请提供指令内容'];
@@ -144,33 +144,59 @@ export class QBot {
     // 插件通常不应独立监听 naplink 事件
     client.on('message.group', async (data: GroupMessageEvent) => {
       // 如果不是目标群组的消息，直接忽略
-      if (this.targetGroup !== String(data.group_id)) return;
+      // 自己发送的消息也会忽略（理论上不会收到自己发送的消息，但还是保险起见加下）
+      const groupId = ensureStringId(data.group_id);
+      const senderId = ensureStringId(data.user_id);
+
+      if (this.targetGroup !== groupId || senderId === this.account) return;
 
       console.log('✍️ 收到群组消息');
       console.dir(data, { depth: null });
 
-      this.latestMessageId = Number(data.message_id);
+      this.latestMessageId = ensureStringId(data.message_id);
 
       // 忽略空消息
       if (!data.raw_message.trim()) return;
 
       // 尝试执行指令调用，如果成功匹配指令，则不触发插件的 onGroupMessage 回调
-      const [success] = await this.command.invoke(data.raw_message, Number(data.user_id));
+      const [success] = await this.command.invoke(data.raw_message, senderId);
 
       if (!success) {
         this.invokeGroupMessage(data);
       }
     });
 
-    client.on('notice.notify.poke', async (data: GroupMessageEvent) => {
+    client.on('notice.notify.poke', async (data: PokeNotice) => {
+      const fromUserId = ensureStringId(data.user_id);
+      const toUserId = ensureStringId(data.target_id);
+      const messageId = 'poke:' + data.time; // 戳一戳没有消息 id，使用 poke:时间戳代替
+
+      let cnt = 0;
+      const message = data.raw_info
+        .map(item => {
+          if (item.type === 'nor') return item.txt;
+          if (item.type === 'qq') {
+            const result = cnt === 0 ? fromUserId : toUserId;
+            cnt++;
+            return result;
+          }
+
+          return '';
+        })
+        .join('');
+
       console.log('✍️ 收到戳一戳消息');
-      console.log(data);
+      console.dir(data, { depth: null });
 
       // 如果不是目标群组的消息，直接忽略
       if (this.targetGroup !== String(data.group_id)) return;
 
+      // 添加消息记录
+      this.latestMessageId = messageId;
+      await this.addHistory(messageId, fromUserId, message, data.time);
+
       for (const item of this.plugins) {
-        item.onPoke?.(data);
+        item.onPoke?.(data, messageId, message, fromUserId, toUserId);
       }
     });
 
@@ -205,7 +231,7 @@ export class QBot {
   }
 
   /** 向数据库添加一条消息记录 */
-  async addHistory(messageId: string | number, sender: string | number, rawMessage: string, timeStamp: number) {
+  async addHistory(messageId: string, sender: string, rawMessage: string, timeStamp: number) {
     // 注意 id 可能由于精度原因存在小数部分，需仅保留整数
     const params: AddHistoryParams = {
       type: 'add-history',
@@ -231,12 +257,15 @@ export class QBot {
     return (result as any).result;
   }
 
-  /** 向目标群组发送消息，并更新消息记录。返回发送的消息 id */
-  async sendGroupMessage(raw_message: string): Promise<string> {
+  /** 向目标群组发送消息，并更新消息记录。返回发送的消息 id，特殊的消息会通过 prefix 参数添加前缀 */
+  async sendGroupMessage(raw_message: string, prefix: '' | 'corn' = ''): Promise<string> {
     const { message_id } = await this.naplink.sendGroupMessage(this.targetGroup, raw_message);
     const msg = await this.naplink.getMessage(message_id);
 
-    await this.addHistory(msg.message_id, msg.user_id, msg.raw_message, msg.time);
+    // 非空消息才记录
+    if (msg.raw_message.trim()) {
+      await this.addHistory((prefix ? prefix + ':' : '') + msg.message_id, msg.user_id, msg.raw_message, msg.time);
+    }
 
     return message_id;
   }
@@ -266,7 +295,7 @@ export interface QBotPlugin {
   onGroupMessage?: (data: GroupMessageEvent) => void;
 
   /** 在戳一戳时触发的 hook 函数 */
-  onPoke?: (data: GroupMessageEvent) => void;
+  onPoke?: (data: PokeNotice, messageId: string, message: string, fromUserId: string, toUserId: string) => void;
 }
 
 export interface CommandParams {
@@ -288,7 +317,7 @@ export interface CommandHandlerParams {
   params: string;
 
   /** 发送者 qq 号 */
-  sender: number;
+  sender: string;
 
   /** 是否静默执行，不发送群消息提示 */
   silent: boolean;
