@@ -99,5 +99,13 @@ export const randomInt = () => {
   return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 };
 
+export const tryRun = <T>(func: () => T): [Error, null] | [null, T] => {
+  try {
+    return [null, func()];
+  } catch (e) {
+    return [e, null];
+  }
+};
+
 export * from './worker.ts';
 export * from './http-client.ts';

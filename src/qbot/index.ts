@@ -171,6 +171,8 @@ export class QBot {
       const toUserId = ensureStringId(data.target_id);
       const messageId = 'poke:' + data.time; // 戳一戳没有消息 id，使用 poke:时间戳代替
 
+      this.latestMessageId = messageId;
+
       let cnt = 0;
       const message = data.raw_info
         .map(item => {
@@ -192,7 +194,6 @@ export class QBot {
       if (this.targetGroup !== String(data.group_id)) return;
 
       // 添加消息记录
-      this.latestMessageId = messageId;
       await this.addHistory(messageId, fromUserId, message, data.time);
 
       for (const item of this.plugins) {

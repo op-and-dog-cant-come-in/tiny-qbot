@@ -10,3 +10,6 @@
 /*.db-shm
 /*.db-wal
 /log
+/meme
+/meme.json
+/image-recognize.json

@@ -27,12 +27,6 @@ export class HttpClient {
             body: JSON.stringify(data),
           });
 
-          // 判断状态码是否为 200~299
-          if (!res.ok) {
-            this.debugInfo(`🌐❌ 错误的状态码 POST ${this.baseUrl + path}`, res.status, res.statusText);
-            return [null, new Error(res.statusText), res];
-          }
-
           let content;
 
           // JSON 响应体需额外检查 json 解析错误的场景
@@ -53,6 +47,12 @@ export class HttpClient {
             headers: res.headers,
             content,
           });
+
+          // 判断状态码是否为 200~299
+          if (!res.ok) {
+            this.debugInfo(`🌐❌ 错误的状态码 POST ${this.baseUrl + path}`, res.status, res.statusText);
+            return [null, new Error(res.statusText), res];
+          }
 
           return [content as U, null, res];
         } catch (e) {

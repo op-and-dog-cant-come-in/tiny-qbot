@@ -78,11 +78,11 @@ export class Meme implements QBotPlugin {
       return text;
     }
 
-    const absolutePath = path.join(process.cwd(), 'meme', memeItem.path);
-    const result = `[CQ:image,file=${absolutePath}]`;
+    const containerPath = `/app/napcat/data/meme/${memeItem.path}`;
+    const result = `[CQ:image,file=${containerPath}]`;
     await this.qbot.sendGroupMessage(result);
 
-    return result;
+    return silent ? result : '表情包发送成功喵';
   };
 
   saveMeme = async (params: CommandHandlerParams): Promise<string> => {
@@ -167,6 +167,7 @@ export class Meme implements QBotPlugin {
 
     const text = `当前表情包列表：\n${names.join(' ')}`;
     !silent && (await this.qbot.sendGroupMessage(text));
+
     return text;
   };
 

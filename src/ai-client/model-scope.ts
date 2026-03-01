@@ -1,15 +1,15 @@
 import { client } from '../utils/http-client.ts';
-import { type AIClient, type AIMessageItem } from '../ai-client.ts';
+import { type AIClient, type AIMessageItem, type ResponseMessage } from './ai-client.ts';
 
 const models = [
   'deepseek-ai/DeepSeek-V3.2',
-  'deepseek-ai/DeepSeek-R1-0528',
   'ZhipuAI/GLM-5',
   'ZhipuAI/GLM-4.6:ZhipuAI',
   'ZhipuAI/GLM-4.5:ZhipuAI',
   'MiniMax/MiniMax-M2.5',
   'ZhipuAI/GLM-4.7-Flash',
   'Qwen/Qwen3-235B-A22B',
+  'deepseek-ai/DeepSeek-R1-0528',
   'Qwen/Qwen3-235B-A22B-Instruct-2507',
   'Qwen/Qwen3-Coder-480B-A35B-Instruct',
   'MiniMax/MiniMax-M1-80k',
@@ -23,7 +23,7 @@ export class ModelScope implements AIClient {
     this.apiKey = apiKey;
   }
 
-  async chat(messages: AIMessageItem[]): Promise<[boolean, string]> {
+  async chat(messages: AIMessageItem[], tools: any): Promise<[true, ResponseMessage] | [false, string]> {
     try {
       let loop = true;
 
@@ -34,7 +34,8 @@ export class ModelScope implements AIClient {
             model: this.currentModel,
             messages,
             stream: false,
-            // enable_thinking: false,
+            enable_thinking: true,
+            tools,
           },
           {
             headers: {
@@ -46,7 +47,7 @@ export class ModelScope implements AIClient {
 
         if (!error) {
           const choice = data.choices?.[0];
-          return [true, choice.message.content || choice.delta.content || ''];
+          return [true, choice.message || {}];
         }
 
         // 如果是 429 报错，则更换模型重新请求

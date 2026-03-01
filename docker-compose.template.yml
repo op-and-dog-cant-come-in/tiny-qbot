@@ -13,6 +13,7 @@ services:
     volumes:
       - ./onebot11.json:/app/napcat/config/onebot11_<%= ACCOUNT %>.json
       - ./jmpdf:/app/napcat/data/jmpdf
+      - ./meme:/app/napcat/data/meme
     container_name: napcat
     network_mode: bridge
     restart: always
