@@ -1,13 +1,17 @@
 import { client } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
+import fs from 'fs-extra';
+import { tryReadJson } from '../utils/index.ts';
 
 const models = ['moonshotai/Kimi-K2.5', 'Qwen/Qwen3.5-397B-A17B'];
+const CACHE_FILE = 'image-recognize.json';
 
 export class ImageRecognize implements QBotPlugin {
   name = 'image-recognize';
   qbot: QBot;
   apiKey: string;
   currentModel = models[0];
+  cache: Record<string, string> = {};
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -15,6 +19,7 @@ export class ImageRecognize implements QBotPlugin {
 
   install = async (qbot: QBot) => {
     this.qbot = qbot;
+    this.cache = await tryReadJson(CACHE_FILE, {});
 
     qbot.command.register({
       name: '识图',
@@ -22,6 +27,10 @@ export class ImageRecognize implements QBotPlugin {
       description: '/识图 <图片> 使用AI识别图片内容，以文本形式描述',
       handler: this.recognizeImage,
     });
+  };
+
+  saveCache = async () => {
+    await fs.writeJson(CACHE_FILE, this.cache, { spaces: 2 });
   };
 
   extractImageUrl(message: string = ''): string | null {
@@ -55,6 +64,14 @@ export class ImageRecognize implements QBotPlugin {
           !silent && (await this.qbot.sendGroupMessage(text));
           return text;
         }
+      }
+
+      // 检查缓存
+      if (this.cache[imageUrl]) {
+        const result = this.cache[imageUrl];
+        !silent && (await this.qbot.sendGroupMessage(result));
+        console.log('✅ ImageRecognize 使用缓存');
+        return result;
       }
 
       let loop = true;
@@ -91,6 +108,10 @@ export class ImageRecognize implements QBotPlugin {
         if (!error) {
           const choice = data.choices?.[0];
           const result = choice.message.content || choice.delta.content;
+
+          // 保存到缓存
+          this.cache[imageUrl] = result;
+          await this.saveCache();
 
           !silent && (await this.qbot.sendGroupMessage(result));
           console.log('✅ ImageRecognize 识图成功');
