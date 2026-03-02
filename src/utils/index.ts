@@ -107,5 +107,9 @@ export const tryRun = <T>(func: () => T): [Error, null] | [null, T] => {
   }
 };
 
+export const isValidImageUrl = (url: string) => {
+  return url.startsWith('http') || url.startsWith('base64://') || url.startsWith('data:image/');
+};
+
 export * from './worker.ts';
 export * from './http-client.ts';

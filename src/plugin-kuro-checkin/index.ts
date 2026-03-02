@@ -22,10 +22,8 @@ export class KuroCheckIn implements QBotPlugin {
     const token = params.params.trim();
 
     if (!token) {
-      const text = '请输入token';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log('❌ 进行库街区签到失败，未输入token');
-      return text;
+      const text = '❌ 进行库街区签到失败，未输入token';
+      throw new Error(text);
     }
 
     // 生成配置文件

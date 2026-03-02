@@ -21,11 +21,9 @@ export class HajimiMusic implements QBotPlugin {
     const [data, error] = await client.get<any>('http://api.ocoa.cn/api/hjm.php');
 
     if (error) {
-      const text = '哈基米音乐获取失败了喵\n' + error?.message || '未知错误';
-      console.log('❌ HajimiMusic 获取音乐链接失败');
+      const text = '❌ 哈基米音乐获取失败了喵\n' + error?.message || '未知错误';
       console.log(error);
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
 
     const result = `[CQ:record,file=${data.url}]`;

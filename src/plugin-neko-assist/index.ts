@@ -87,9 +87,8 @@ export class NekoAssist implements QBotPlugin {
         const [name, content] = args.replace(/\s/, '\u200B').split('\u200B');
 
         if (!name || !content) {
-          const errorMsg = '参数格式错误，请使用：/memory-update <名称> <内容>';
-          !silent && (await qbot.sendGroupMessage(errorMsg));
-          return errorMsg;
+          const errorMsg = '❌ 参数格式错误，请使用：/memory-update <名称> <内容>';
+          throw new Error(errorMsg);
         }
 
         this.memory[name] = content;
@@ -109,9 +108,8 @@ export class NekoAssist implements QBotPlugin {
         const [name] = args.replace(/\s/, '\u200B').split('\u200B');
 
         if (!name) {
-          const errorMsg = '参数格式错误，请使用：/memory-delete <名称>';
-          !silent && (await qbot.sendGroupMessage(errorMsg));
-          return errorMsg;
+          const errorMsg = '❌ 参数格式错误，请使用：/memory-delete <名称>';
+          throw new Error(errorMsg);
         }
 
         delete this.memory[name];
@@ -134,9 +132,9 @@ export class NekoAssist implements QBotPlugin {
         const end = parseInt(endStr, 10);
 
         if (isNaN(start) || isNaN(end) || start < 0 || end <= start) {
-          const errorMsg = '参数格式错误，请使用：/recent <start> <end>，其中 start 和 end 为非负整数，且 end > start';
-          !silent && (await qbot.sendGroupMessage(errorMsg));
-          return errorMsg;
+          const errorMsg =
+            '❌ 参数格式错误，请使用：/recent <start> <end>，其中 start 和 end 为非负整数，且 end > start';
+          throw new Error(errorMsg);
         }
 
         try {
@@ -151,7 +149,8 @@ export class NekoAssist implements QBotPlugin {
 
           return result;
         } catch (e) {
-          return `获取历史消息失败：${e.toString()}`;
+          const errorMsg = '❌ 获取历史消息失败：' + e.toString();
+          throw new Error(errorMsg);
         }
       },
     });

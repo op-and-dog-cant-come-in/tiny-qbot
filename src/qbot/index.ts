@@ -71,7 +71,10 @@ export class QBot {
       metaMap.set(params.name, params);
     },
 
-    /** 执行一条指令，返回 [是否成功执行指令, 指令的执行结果] */
+    /**
+     * 执行一条指令，返回 [是否存在该指令, 指令的执行结果]
+     * 需注意：第一个返回值为 true 仅代表该指令存在，指令是否报错仍需根据第二个返回值判断
+     */
     invoke: async (command: string, sender: string, silent = false): Promise<[boolean, string]> => {
       try {
         // 有时 ai 会忘记填写 command 字段，这里做下容错
@@ -96,6 +99,7 @@ export class QBot {
       } catch (e) {
         console.log(`❌ 指令执行出错 ${sender}: ${command}`);
         console.dir(e);
+        !silent && (await this.sendGroupMessage(`指令执行失败了喵:${command}\n${e.toString()}`));
         return [false, e.toString()];
       }
     },

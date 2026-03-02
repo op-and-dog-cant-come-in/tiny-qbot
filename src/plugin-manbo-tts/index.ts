@@ -21,20 +21,13 @@ export class ManboTTS implements QBotPlugin {
     const text = params.params.trim();
 
     if (!text) {
-      console.log('❌ ManboTTS 文本内容为空');
-      const text = '文本内容为空，无法生成曼波语音';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error('❌ 文本内容为空，无法生成曼波语音');
     }
 
     const [data, error] = await client.get(`https://api.milorapart.top/apis/mbAIsc?text=${encodeURIComponent(text)}`);
 
     if (error) {
-      const text = '生成曼波语音失败了喵\n' + error?.message || '未知错误';
-      console.log('❌ ManboTTS 生成语音失败');
-      console.log(error);
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error('❌ 生成曼波语音失败了喵\n' + error?.message || '未知错误');
     }
 
     const result = `[CQ:record,file=${data.url}]`;

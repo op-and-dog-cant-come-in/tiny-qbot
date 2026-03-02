@@ -64,9 +64,8 @@ export class BaiduWebSearch implements QBotPlugin {
     let query = params.params.trim();
 
     if (!query) {
-      const text = '请提供搜索关键词，例如: /web-search 北京景点';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      const text = '❌ 请提供搜索关键词，例如: /web-search 今日新闻';
+      throw new Error(text);
     }
 
     const [data, error] = await client.post<BaiduSearchRequest, BaiduSearchResponse>(
@@ -85,11 +84,9 @@ export class BaiduWebSearch implements QBotPlugin {
     );
 
     if (error) {
-      const text = '百度搜索请求失败了喵\n' + (error?.message || '未知错误');
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log('❌ BaiduWebSearch 搜索失败');
+      const text = '❌ 百度搜索请求失败了喵\n' + (error?.message || '未知错误');
       console.log(error);
-      return text;
+      throw new Error(text);
     }
 
     const references = data.references || [];

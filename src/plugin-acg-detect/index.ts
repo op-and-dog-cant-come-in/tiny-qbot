@@ -1,4 +1,4 @@
-import { client } from '../utils/index.ts';
+import { client, isValidImageUrl } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 
 interface SauceNAOResult {
@@ -58,18 +58,19 @@ export class ACGDetect implements QBotPlugin {
     let imageUrl = this.extractImageUrl(params.params);
 
     if (!imageUrl) {
-      const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(
-        item => item.sender === params.sender
-      );
+      const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(item => item.sender === params.sender);
 
       imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');
 
       if (!imageUrl) {
-        const text = '没有找到图片喵，请发送带图片的消息';
-        console.log('❌ ACGDetect 未找到图片URL');
-        !silent && (await this.qbot.sendGroupMessage(text));
-        return text;
+        const text = '❌ 没有找到图片地址喵，请发送带图片的消息';
+        throw new Error(text);
       }
+    }
+
+    if (!isValidImageUrl(imageUrl)) {
+      const text = '❌ 图片URL格式错误喵，确保格式为 http 地址或 base64 编码喵';
+      throw new Error(text);
     }
 
     const apiUrl = `https://saucenao.com/search.php?api_key=${this.apiKey}&db=999&output_type=2&numres=20&url=${encodeURIComponent(imageUrl)}`;
@@ -77,16 +78,13 @@ export class ACGDetect implements QBotPlugin {
     const [data, error] = await client.get<SauceNAOResponse>(apiUrl);
 
     if (error) {
-      const text = '识别失败了喵\n' + error?.message || '未知错误';
-      console.log('❌ ACGDetect 识别失败');
+      const text = '❌ 识别失败了喵\n' + error?.message || '未知错误';
       console.log(error);
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
 
     if (!data.results || data.results.length === 0) {
-      const text = '未找到匹配的二次元角色喵';
-      console.log('⚠️ ACGDetect 未找到匹配结果');
+      const text = '⚠️ 未找到匹配的二次元角色喵';
       !silent && (await this.qbot.sendGroupMessage(text));
       return text;
     }

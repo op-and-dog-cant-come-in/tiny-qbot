@@ -69,8 +69,7 @@ export class Hotboard implements QBotPlugin {
     if (!SOURCE_MAP[source]) {
       const availableSources = Object.keys(SOURCE_MAP).join(', ');
       const text = `❌ 不支持的来源喵\n\n可用来源：${availableSources}`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
 
     const [data, error] = await client.get<HotboardResponse>(
@@ -78,11 +77,9 @@ export class Hotboard implements QBotPlugin {
     );
 
     if (error) {
-      const text = '热榜接口请求失败了喵\n' + (error?.message || '未知错误');
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log('❌ Hotboard 获取热榜失败');
+      const text = '❌ 热榜接口请求失败了喵\n' + (error?.message || '未知错误');
       console.log(error);
-      return text;
+      throw new Error(text);
     }
 
     const sourceName = SOURCE_MAP[source];

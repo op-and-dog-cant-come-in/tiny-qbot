@@ -21,10 +21,8 @@ export class JMComic implements QBotPlugin {
     const album_id = params.params.trim();
 
     if (!album_id) {
-      const text = '请输入本子id';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log('❌ 下载jm本子失败，未输入本子id');
-      return text;
+      const text = '❌ 下载jm本子失败，未输入本子id喵';
+      throw new Error(text);
     }
 
     const { exitCode } = await execa(`uv`, ['run', 'src/plugin-jmcomic/download-album.py', album_id], {
@@ -33,33 +31,36 @@ export class JMComic implements QBotPlugin {
     });
 
     if (exitCode) {
-      const text = `下载jm本子失败，exitCode: ${exitCode}`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log(text);
-      return text;
+      const text = `❌ 下载jm本子失败，exitCode: ${exitCode}`;
+      throw new Error(text);
     }
 
     const fileName = `${album_id}.pdf`;
     const filePath = `/app/napcat/data/jmpdf/${fileName}`;
 
     try {
-      const message_id = await this.qbot.sendGroupMessage(`[CQ:file,file=${filePath},name=${fileName}]`);
-      console.log(`✅ 成功发送文件: ${fileName}`);
+      const result = `[CQ:file,file=${filePath},name=${fileName}]`;
 
-      // 10分钟后删除文件
-      setTimeout(
-        async () => {
-          await this.qbot.naplink.deleteMessage(message_id);
-          console.log(`✅ 已删除文件: ${fileName}`);
-        },
-        10 * 60 * 1000
-      );
+      if (!silent) {
+        const message_id = await this.qbot.sendGroupMessage(result);
+        console.log(`✅ 成功发送文件: ${fileName}`);
+
+        // 10分钟后删除文件
+        setTimeout(
+          async () => {
+            await this.qbot.naplink.deleteMessage(message_id);
+            console.log(`✅ 已删除文件: ${fileName}`);
+          },
+          10 * 60 * 1000
+        );
+      } else {
+        return result;
+      }
     } catch (error) {
       console.log(`❌ 发送文件失败: ${fileName}`);
       console.log(error);
       const text = `发送文件失败: ${error.message}`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
   };
 }

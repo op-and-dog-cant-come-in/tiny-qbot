@@ -229,8 +229,7 @@ export class AITTS implements QBotPlugin {
     const { silent = false } = params;
 
     if (!args) {
-      console.log('❌ AITTS 文本内容为空');
-      return '文本内容为空，无法生成语音';
+      throw new Error('❌ 文本内容为空，无法生成语音喵');
     }
 
     const parts = args.split(/\s+/);
@@ -247,10 +246,10 @@ export class AITTS implements QBotPlugin {
     );
 
     if (error) {
-      !silent && (await this.qbot.sendGroupMessage(`语音生成失败了喵\n${error?.message || '未知错误'}`));
-      console.log('❌ AITTS 生成语音失败');
+      const text = `❌ 生成语音失败了喵\n${error?.message || '未知错误'}`;
+      !silent && (await this.qbot.sendGroupMessage(text));
       console.log(error);
-      return `语音生成失败: ${error?.message || '未知错误'}`;
+      throw new Error(text);
     }
 
     const result = `[CQ:record,file=${data.url}]`;

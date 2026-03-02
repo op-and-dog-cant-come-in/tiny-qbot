@@ -57,7 +57,7 @@ export class CornTask implements QBotPlugin {
       description: `/corn-list 列出当前已有的定时任务`,
       handler: async (params: CommandHandlerParams) => {
         const result = this.getCornTasksPrompts();
-        !params.silent && (await this.qbot.sendGroupMessage(result));
+        !params.silent && (await this.qbot.sendGroupMessage(result, 'corn'));
         return result;
       },
     });
@@ -76,9 +76,8 @@ export class CornTask implements QBotPlugin {
 
       // 检查时间格式是否为 YYYY-MM-DD HH:mm
       if (!dayjs(`${t1} ${t2}`, CORN_TIME_FORMAT).isValid()) {
-        const text = `参数格式错误，<time> 参数必须为 ${CORN_TIME_FORMAT} 格式的时间字符串`;
-        !silent && (await this.qbot.sendGroupMessage(text));
-        return text;
+        const text = `❌ 参数格式错误，<time> 参数必须为 ${CORN_TIME_FORMAT} 格式的时间字符串`;
+        throw new Error(text);
       }
 
       return await this.createCorn(name, type, `${t1} ${t2}`, desc, silent);
@@ -89,16 +88,14 @@ export class CornTask implements QBotPlugin {
 
       // 检查是否存在空参数
       if (!t1 || !t2 || !t3 || !t4 || !t5 || !t6 || !desc) {
-        const text = '参数格式错误，<time> 参数必须为 6 个非空参数，且 <desc> 不能为空';
-        !silent && (await this.qbot.sendGroupMessage(text));
-        return text;
+        const text = '❌ 参数格式错误，<time> 参数必须为 6 个非空参数，且 <desc> 不能为空';
+        throw new Error(text);
       }
 
       return await this.createCorn(name, type, `${t1} ${t2} ${t3} ${t4} ${t5} ${t6}`, desc, silent);
     } else {
-      const text = '参数格式错误，<type> 参数必须为 at 或 corn';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      const text = '❌ 参数格式错误，<type> 参数必须为 at 或 corn';
+      throw new Error(text);
     }
   };
 
@@ -108,9 +105,8 @@ export class CornTask implements QBotPlugin {
     const matched = args.match(/^(\S+)$/);
 
     if (!matched) {
-      const text = '参数格式错误，正确格式为：/corn-delete <name>';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      const text = '❌ 参数格式错误，正确格式为：/corn-delete <name>';
+      throw new Error(text);
     }
 
     const [_, name] = matched;
@@ -139,6 +135,11 @@ export class CornTask implements QBotPlugin {
       console.log('🚀 定时任务已触发');
       console.dir({ name, type, time, desc });
 
+      // 一次性的任务要在执行后删除
+      if (type === 'at') {
+        this.removeCornTask(name);
+      }
+
       // 发送一条 at 猫猫的消息触发回复
       qbot.invokeGroupMessage(
         new SystemMessage({
@@ -148,11 +149,6 @@ export class CornTask implements QBotPlugin {
           rawMessage: `[CQ:at,qq=${this.qbot.account}] [系统消息][定时任务触发 ${name}] 猫猫需执行以下任务：\n${desc}`,
         })
       );
-
-      // 一次性的任务要在执行后删除
-      if (type === 'at') {
-        this.removeCornTask(name);
-      }
     });
 
     cornTasks[name] = { type, time, desc };

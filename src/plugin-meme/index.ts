@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { blake3 } from 'hash-wasm';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
+import { isValidImageUrl } from '../utils/index.ts';
 
 interface MemeItem {
   path: string;
@@ -31,7 +32,8 @@ export class Meme implements QBotPlugin {
 
     qbot.command.register({
       name: 'meme-save',
-      description: '/meme-save <表情包名称> <图片地址> 保存一个表情包，表情包名称不能包含空白',
+      description:
+        '/meme-save <表情包名称> <图片地址> 保存一个表情包，表情包名称不能包含空白，存在重复图片时会覆盖原有图片的名称',
       handler: this.saveMeme,
     });
 
@@ -65,17 +67,13 @@ export class Meme implements QBotPlugin {
     const name = args?.trim();
 
     if (!name) {
-      const text = '请提供表情包名称喵';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error('❌ 请提供表情包名称喵');
     }
 
     const memeItem = this.memeData[name];
 
     if (!memeItem) {
-      const text = `表情包 "${name}" 不存在喵`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(`❌ 表情包 "${name}" 不存在喵`);
     }
 
     const containerPath = `/app/napcat/data/meme/${memeItem.path}`;
@@ -91,8 +89,7 @@ export class Meme implements QBotPlugin {
 
     if (!parts || parts.length < 2) {
       const text = '请提供表情包名称和图片地址喵';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
 
     let name = parts[0];
@@ -103,8 +100,13 @@ export class Meme implements QBotPlugin {
 
     if (this.memeData[name]) {
       const text = `已存在名称为 "${name}" 的表情包喵`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
+    }
+
+    // 验证图片 URL 格式
+    if (!isValidImageUrl(imageUrl)) {
+      const text = '图片URL格式错误喵，确保格式为 http 地址或 base64 编码喵';
+      throw new Error(text);
     }
 
     try {
@@ -112,8 +114,7 @@ export class Meme implements QBotPlugin {
 
       if (!res.ok) {
         const text = `下载图片失败喵: ${res.statusText}`;
-        !silent && (await this.qbot.sendGroupMessage(text));
-        return text;
+        throw new Error(text);
       }
 
       const contentType = res.headers.get('content-type') || '';
@@ -130,28 +131,31 @@ export class Meme implements QBotPlugin {
       const buffer = Buffer.from(await res.arrayBuffer());
       const hash = await blake3(buffer);
 
+      // 检查是否有相同图片，有的话直接修改名称即可
       for (const [existingName, item] of Object.entries(this.memeData)) {
         if (item.hash === hash) {
-          const text = `已存在相同的表情包 "${existingName}" 喵`;
-          !silent && (await this.qbot.sendGroupMessage(text));
-          return text;
+          delete this.memeData[existingName];
+          this.memeData[name] = item;
         }
       }
 
       const fileName = `${name}.${ext}`;
       const filePath = path.join('meme', fileName);
 
-      await fs.writeFile(filePath, buffer);
+      // 如果已经有值了，就说明是存在相同图片并通过重命名解决了，无需再写入文件了
+      if (!this.memeData[name]) {
+        await fs.writeFile(filePath, buffer);
+        this.memeData[name] = { path: fileName, hash };
+      }
 
-      this.memeData[name] = { path: fileName, hash };
       await this.saveMemeData();
       const text = `表情包 "${name}" 保存成功喵`;
       !silent && (await this.qbot.sendGroupMessage(text));
       return text;
     } catch (e) {
+      console.error(e);
       const text = `保存表情包失败喵: ${e}`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
   };
 
@@ -160,9 +164,7 @@ export class Meme implements QBotPlugin {
     const names = Object.keys(this.memeData);
 
     if (names.length === 0) {
-      const text = '当前没有表情包喵';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      return '当前没有表情包喵';
     }
 
     const text = `当前表情包列表：\n${names.join(' ')}`;
@@ -177,16 +179,13 @@ export class Meme implements QBotPlugin {
 
     if (!name) {
       const text = '请提供表情包名称喵';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(text);
     }
 
     const memeItem = this.memeData[name];
 
     if (!memeItem) {
-      const text = `表情包 "${name}" 不存在喵`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      throw new Error(`❌ 表情包 "${name}" 不存在喵`);
     }
 
     try {
@@ -199,9 +198,8 @@ export class Meme implements QBotPlugin {
       !silent && (await this.qbot.sendGroupMessage(text));
       return text;
     } catch (e) {
-      const text = `删除表情包失败喵: ${e}`;
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+      const text = `❌ 删除表情包失败喵: ${e}`;
+      throw new Error(text);
     }
   };
 }

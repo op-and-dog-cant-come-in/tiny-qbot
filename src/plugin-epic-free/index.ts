@@ -42,11 +42,9 @@ export class EpicFree implements QBotPlugin {
     const [data, error] = await client.get<EpicFreeResponse>('https://uapis.cn/api/v1/game/epic-free');
 
     if (error) {
-      const text = 'EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
-      !silent && (await this.qbot.sendGroupMessage(text));
-      console.log('❌ EpicFree 获取免费游戏失败');
+      const text = '❌ EpicFree 接口请求失败了喵\n' + error?.message || '未知错误';
       console.log(error);
-      return text;
+      throw new Error(text);
     }
 
     let message = `🎮 ${data.message}\n\n`;

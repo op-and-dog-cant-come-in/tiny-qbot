@@ -1,4 +1,4 @@
-import { client } from '../utils/index.ts';
+import { client, isValidImageUrl } from '../utils/index.ts';
 import { type QBotPlugin, type QBot, type CommandHandlerParams } from '../qbot/index.ts';
 import fs from 'fs-extra';
 import { tryReadJson } from '../utils/index.ts';
@@ -34,8 +34,14 @@ export class ImageRecognize implements QBotPlugin {
   };
 
   extractImageUrl(message: string = ''): string | null {
-    const cqPattern = /\[CQ:image.*?url=([^,\]]+)/;
-    const match = message.match(cqPattern);
+    const urlPattern = /\[CQ:image.*?url=([^,\]]+)/;
+    const filePattern = /\[CQ:image.*?file=([^,\]]+)/;
+
+    let match = message.match(urlPattern);
+
+    if (!match) {
+      match = message.match(filePattern);
+    }
 
     if (match && match[1]) {
       let url = match[1];
@@ -47,95 +53,101 @@ export class ImageRecognize implements QBotPlugin {
   }
 
   recognizeImage = async (params: CommandHandlerParams): Promise<string> => {
-    try {
-      const { silent = false } = params;
-      let imageUrl = this.extractImageUrl(params.params);
+    const { silent = false } = params;
+    let imageUrl = this.extractImageUrl(params.params);
 
-      // 当前消息没有提供图片的话，尝试使用上两条消息再试一次
+    // 当前消息没有提供图片的话，尝试使用上两条消息再试一次
+    if (!imageUrl) {
+      // 找出最近 5 条消息中发送者的消息的前两条进行尝试
+      const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(item => item.sender === params.sender);
+      imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');
+
+      // 也没找到图片的话就报错
       if (!imageUrl) {
-        // 找出最近 5 条消息中发送者的消息的前两条进行尝试
-        const [prev1, prev2] = (await this.qbot.getRecentHistory(0, 5)).filter(item => item.sender === params.sender);
-        imageUrl = this.extractImageUrl(prev1?.raw_message || '') || this.extractImageUrl(prev2?.raw_message || '');
-
-        // 也没找到图片的话就报错
-        if (!imageUrl) {
-          const text = '没有找到图片喵，请发送带图片的消息';
-          console.log('❌ ImageRecognize 未找到图片URL');
-          !silent && (await this.qbot.sendGroupMessage(text));
-          return text;
-        }
+        const text = '❌ 没有找到图片喵，请在消息中包含CQ语法格式的图片喵';
+        throw new Error(text);
       }
+    }
 
-      // 检查缓存
-      if (this.cache[imageUrl]) {
-        const result = this.cache[imageUrl];
+    // 检查缓存
+    if (this.cache[imageUrl]) {
+      const result = this.cache[imageUrl];
+
+      console.log('✅ ImageRecognize 使用缓存', imageUrl);
+      console.log(result);
+
+      !silent && (await this.qbot.sendGroupMessage(result));
+
+      return result;
+    }
+
+    // 检查 imageUrl 是否为合法的 URL 或 base64 编码
+    if (!isValidImageUrl(imageUrl)) {
+      const text = '❌ 图片URL格式错误喵，确保格式为 http 地址或 base64 编码喵';
+      throw new Error(text);
+    }
+
+    let loop = true;
+
+    while (loop) {
+      const [data, error, res] = await client.post(
+        'https://api-inference.modelscope.cn/v1/chat/completions',
+        {
+          model: this.currentModel,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: '请描述这张图片的内容，生成100字以内的回复' },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: imageUrl,
+                  },
+                },
+              ],
+            },
+          ],
+          stream: false,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!error) {
+        const choice = data.choices?.[0];
+        const result = choice.message.content || choice.delta.content;
+
+        // 保存到缓存
+        this.cache[imageUrl] = result;
+        await this.saveCache();
+
         !silent && (await this.qbot.sendGroupMessage(result));
-        console.log('✅ ImageRecognize 使用缓存');
+        console.log('✅ ImageRecognize 识图成功');
+        console.log(data);
+
         return result;
       }
 
-      let loop = true;
+      // 如果是 429 报错，则更换模型重新请求
+      if (res.status === 429) {
+        console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
+        this.currentModel = models[models.indexOf(this.currentModel) + 1];
 
-      while (loop) {
-        const [data, error, res] = await client.post(
-          'https://api-inference.modelscope.cn/v1/chat/completions',
-          {
-            model: this.currentModel,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: '请描述这张图片的内容，生成100字以内的回复' },
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: imageUrl,
-                    },
-                  },
-                ],
-              },
-            ],
-            stream: false,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (!error) {
-          const choice = data.choices?.[0];
-          const result = choice.message.content || choice.delta.content;
-
-          // 保存到缓存
-          this.cache[imageUrl] = result;
-          await this.saveCache();
-
-          !silent && (await this.qbot.sendGroupMessage(result));
-          console.log('✅ ImageRecognize 识图成功');
-          console.log(data);
-
-          return result;
+        if (!this.currentModel) {
+          const text = '❌ 模型额度用完了喵，没法回复了喵';
+          throw new Error(text);
         }
 
-        // 如果是 429 报错，则更换模型重新请求
-        if (res.status === 429) {
-          console.log(`❌ 模型 ${this.currentModel} 额度用完了喵，尝试更换模型喵...`);
-          this.currentModel = models[models.indexOf(this.currentModel) + 1];
-
-          if (!this.currentModel) {
-            return '模型额度用完了喵，没法回复了喵';
-          }
-
-          continue;
-        }
-
-        return '图片识别失败了喵';
+        continue;
       }
-    } catch (e) {
-      return '图片识别失败了喵\n' + e?.message || '未知错误';
+
+      const text = `❌ 图片识别失败了喵\n${JSON.stringify(data, null, 2)}`;
+      throw new Error(text);
     }
   };
 }

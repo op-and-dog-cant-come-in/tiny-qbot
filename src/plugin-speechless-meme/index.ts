@@ -18,40 +18,33 @@ export class SpeechlessMeme implements QBotPlugin {
   sendSpeechlessMeme = async (params: CommandHandlerParams): Promise<string> => {
     const { silent = false } = params;
 
-    try {
-      const args = params.params.trim().split(/\s+/);
-      const [topText = '玩原神', bottomText = `不要再${topText}了`] = args;
+    const args = params.params.trim().split(/\s+/);
+    const [topText = '玩原神', bottomText = `不要再${topText}了`] = args;
 
-      const response = await fetch('https://uapis.cn/api/v1/image/speechless', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          top_text: topText,
-          bottom_text: bottomText,
-        }),
-      });
+    const response = await fetch('https://uapis.cn/api/v1/image/speechless', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        top_text: topText,
+        bottom_text: bottomText,
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error(`请求失败: ${response.status} ${response.statusText}`);
-      }
-
-      const imageBuffer = await response.arrayBuffer();
-      const base64Image = Buffer.from(imageBuffer).toString('base64');
-      const message = `[CQ:image,file=base64://${base64Image}]`;
-
-      !silent && (await this.qbot.sendGroupMessage(message));
-      console.log('✅ SpeechlessMeme 发送表情包成功');
-      console.log(`Top: ${topText}, Bottom: ${bottomText}`);
-
-      return message;
-    } catch (e) {
-      const text = '发送表情包失败了喵\n' + (e?.message || '未知错误');
-      console.log('❌ SpeechlessMeme 发送表情包失败');
-      console.log(e);
-      !silent && (await this.qbot.sendGroupMessage(text));
-      return text;
+    if (!response.ok) {
+      const text = `❌ 请求失败: ${response.status} ${response.statusText}`;
+      throw new Error(text);
     }
+
+    const imageBuffer = await response.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    const message = `[CQ:image,file=base64://${base64Image}]`;
+
+    !silent && (await this.qbot.sendGroupMessage(message));
+    console.log('✅ SpeechlessMeme 发送表情包成功');
+    console.log(`Top: ${topText}, Bottom: ${bottomText}`);
+
+    return message;
   };
 }
