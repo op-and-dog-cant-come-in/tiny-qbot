@@ -18,15 +18,17 @@ import { SpeechlessMeme } from './plugin-speechless-meme/index.ts';
 import { WeatherForcast } from './plugin-weather/index.ts';
 import { QBot } from './qbot/index.ts';
 import { ModelZhipu } from './ai-client/model-zhipu.ts';
+import { ModelScope } from './ai-client/model-scope.ts';
+import { ModelRoutin } from './ai-client/model-routin.ts';
 
 const qbot = new QBot({
   account: '机器人登录的账号',
   group: '机器人服务的群号',
   plugins: [
-    new NekoAssist({ llm: new ModelZhipu('智谱apiKey') }),
+    new NekoAssist({ llm: new ModelRoutin('routin api key') }), // 可换智谱（ModelScope）和魔搭（ModelScope）的接口
     new AITTS(),
     new ACGDetect('saucenao的apiKey'),
-    new BaiduWebSearch('百度apiKey'),
+    new BaiduWebSearch('百度apikey'),
     new CornTask(),
     new EpicFree(),
     new HajimiMusic(),
