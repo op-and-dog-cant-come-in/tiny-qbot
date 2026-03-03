@@ -4,15 +4,13 @@ import { type AIClient, type AIMessageItem, type ResponseMessage } from './ai-cl
 const models = [
   'deepseek-ai/DeepSeek-V3.2',
   'ZhipuAI/GLM-5',
-  'ZhipuAI/GLM-4.6:ZhipuAI',
-  'ZhipuAI/GLM-4.5:ZhipuAI',
   'MiniMax/MiniMax-M2.5',
-  'ZhipuAI/GLM-4.7-Flash',
+  'Qwen/Qwen3.5-397B-A17B',
+  'ZhipuAI/GLM-4.5:ZhipuAI',
   'Qwen/Qwen3-235B-A22B',
   'deepseek-ai/DeepSeek-R1-0528',
-  'Qwen/Qwen3-235B-A22B-Instruct-2507',
-  'Qwen/Qwen3-Coder-480B-A35B-Instruct',
   'MiniMax/MiniMax-M1-80k',
+  'ZhipuAI/GLM-4.7-Flash',
 ];
 
 export class ModelScope implements AIClient {

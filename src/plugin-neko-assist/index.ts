@@ -45,6 +45,9 @@ export class NekoAssist implements QBotPlugin {
    */
   replyQueue: { userId: string; message: string; messageId: string; priority: number }[] = [];
 
+  /** 猫猫对不含关键词消息的回复概率 */
+  replyProbability = 0.15;
+
   constructor(options: NekoAssistInitOptions) {
     this.aiClient = options.llm;
   }
@@ -123,8 +126,7 @@ export class NekoAssist implements QBotPlugin {
     qbot.command.register({
       name: 'recent',
       alias: ['历史消息'],
-      description:
-        '获取最近的第 start 到 end 条历史消息，格式：/recent <start> <end>（左闭右开区间），该指令仅供猫猫后台使用',
+      description: '/recent <start> <end> 获取最近的第 start 到 end 条历史消息（左闭右开区间），该指令仅供猫猫后台使用',
       handler: async params => {
         const { params: args, silent } = params;
         const [startStr, endStr] = args?.split(' ') || [];
@@ -152,6 +154,59 @@ export class NekoAssist implements QBotPlugin {
           const errorMsg = '❌ 获取历史消息失败：' + e.toString();
           throw new Error(errorMsg);
         }
+      },
+    });
+
+    qbot.command.register({
+      name: 'get-forward-message',
+      description: '/get-forward-message <消息id> 获取合并转发消息内容（forward 类型的 CQ 消息）',
+      handler: async params => {
+        const { params: args = '', silent } = params;
+        const [messageId] = args.replace(/\s/, '\u200B').split('\u200B');
+
+        if (!messageId) {
+          const errorMsg = '❌ 参数格式错误，请使用：/get-forward-message <消息id>';
+          throw new Error(errorMsg);
+        }
+
+        try {
+          const forwardMessage = await qbot.naplink.getForwardMessage(messageId);
+          const result = forwardMessage;
+
+          return JSON.stringify(result, null, 2);
+        } catch (e) {
+          const errorMsg = '❌ 获取聚合消息失败：' + e.toString();
+          throw new Error(errorMsg);
+        }
+      },
+    });
+
+    qbot.command.register({
+      name: 'response-probability',
+      alias: ['回复概率'],
+      description:
+        '/response-probability <概率> 设置猫猫对不含关键词消息的回复概率，范围为 0~1，参数为空时返回当前概率',
+      handler: async params => {
+        const { params: args = '', silent } = params;
+        const [probabilityStr] = args.replace(/\s/, '\u200B').split('\u200B');
+        const probability = parseFloat(probabilityStr);
+
+        if (!probabilityStr) {
+          const text = `当前回复概率为 ${this.replyProbability}，对于包含“猫猫”与直接at猫猫的消息仍会固定回复`;
+          !silent && (await qbot.sendGroupMessage(text));
+          return text;
+        }
+
+        if (isNaN(probability) || probability < 0 || probability > 1) {
+          const errorMsg = '❌ 参数格式错误，请使用：/response-probability <概率>，其中概率为 0~1 之间的浮点数';
+          throw new Error(errorMsg);
+        }
+
+        this.replyProbability = probability;
+        const result = `已设置回复概率为 ${probability}，对于包含“猫猫”与直接at猫猫的消息仍会固定回复`;
+        !silent && (await qbot.sendGroupMessage(result));
+
+        return result;
       },
     });
   };
@@ -184,7 +239,7 @@ export class NekoAssist implements QBotPlugin {
       // 等待 15s 后再处理，避免连续发送消息的场景
       await new Promise(resolve => setTimeout(resolve, 15000));
 
-      if (this.qbot.latestMessageId === messageId) {
+      if (this.qbot.latestMessageId === messageId && Math.random() <= this.replyProbability) {
         await this.reply(senderId, message, messageId, 0);
       }
     }
@@ -270,17 +325,15 @@ export class NekoAssist implements QBotPlugin {
         let text = message.content;
 
         // 移除 @ 消息发送者的内容，该内容不必要
-        text = text.replace(`[CQ:at,qq=${userId}]`, '');
-
-        // 如果不是当前最新消息，则需引用当前消息
-        if (qbot.latestMessageId && qbot.latestMessageId !== messageId && !messageId.includes(':')) {
-          text = `[CQ:reply,id=${messageId}] ${text}`;
-        }
-
-        text = text.trim();
+        text = text.replace(`[CQ:at,qq=${userId}]`, '').trim();
 
         // 先发送消息，然后执行工具命令
         if (text) {
+          // 如果不是当前最新消息，则需引用当前消息
+          if (qbot.latestMessageId && qbot.latestMessageId !== messageId && !messageId.includes(':')) {
+            text = `[CQ:reply,id=${messageId}] ${text}`;
+          }
+
           await qbot.sendGroupMessage(text);
         }
 
