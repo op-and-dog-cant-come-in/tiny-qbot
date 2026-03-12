@@ -3,7 +3,7 @@ import { type AIClient, type AIMessageItem, type ResponseMessage } from './ai-cl
 
 export class ModelRoutin implements AIClient {
   apiKey: string;
-  currentModel = 'glm-5';
+  currentModel = 'kimi-k2.5';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;

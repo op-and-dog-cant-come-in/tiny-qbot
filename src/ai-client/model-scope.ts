@@ -5,7 +5,7 @@ const models = [
   'deepseek-ai/DeepSeek-V3.2',
   'ZhipuAI/GLM-5',
   'MiniMax/MiniMax-M2.5',
-  'Qwen/Qwen3.5-397B-A17B',
+  'ZhipuAI/GLM-4.6:ZhipuAI',
   'ZhipuAI/GLM-4.5:ZhipuAI',
   'Qwen/Qwen3-235B-A22B',
   'deepseek-ai/DeepSeek-R1-0528',
