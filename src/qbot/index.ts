@@ -33,6 +33,9 @@ export class QBot {
   /** 记录最新一条群消息的 id */
   latestMessageId: string = '';
 
+  /** 最近一次发送的消息，避免连续的重复消息 */
+  lastSentMessage: string = '';
+
   constructor(options: QBotInitOptions) {
     this.account = options.account;
     this.targetGroup = options.group;
@@ -158,6 +161,7 @@ export class QBot {
       console.dir(data, { depth: null });
 
       this.latestMessageId = ensureStringId(data.message_id);
+      this.lastSentMessage = '';
 
       // 忽略空消息
       if (!data.raw_message.trim()) return;
@@ -176,6 +180,7 @@ export class QBot {
       const messageId = 'poke:' + data.time; // 戳一戳没有消息 id，使用 poke:时间戳代替
 
       this.latestMessageId = messageId;
+      this.lastSentMessage = '';
 
       let cnt = 0;
       const message = data.raw_info
@@ -264,6 +269,9 @@ export class QBot {
 
   /** 向目标群组发送消息，并更新消息记录。返回发送的消息 id，特殊的消息会通过 prefix 参数添加前缀 */
   async sendGroupMessage(raw_message: string, prefix: '' | 'corn' = ''): Promise<string> {
+    // 避免重复发送相同消息
+    if (raw_message === this.lastSentMessage) return '';
+
     const { message_id } = await this.naplink.sendGroupMessage(this.targetGroup, raw_message);
     const msg = await this.naplink.getMessage(message_id);
 
@@ -271,6 +279,8 @@ export class QBot {
     if (msg.raw_message.trim()) {
       await this.addHistory((prefix ? prefix + ':' : '') + msg.message_id, msg.user_id, msg.raw_message, msg.time);
     }
+
+    this.lastSentMessage = raw_message;
 
     return message_id;
   }
