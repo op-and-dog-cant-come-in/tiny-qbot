@@ -2,7 +2,9 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import { blake3 } from 'hash-wasm';
 
-const MEME_DIR = 'meme';
+// 把 meme-init 目录中的文件添加到 meme.json 中，会保留原有数据，跳过重复名称与图片
+
+const MEME_DIR = 'meme-init';
 const MEME_JSON = 'meme.json';
 
 async function main() {
@@ -17,7 +19,7 @@ async function main() {
     return;
   }
 
-  const memeData: Record<string, { path: string; hash: string }> = {};
+  const memeData: Record<string, { path: string; hash: string }> = await fs.readJson(MEME_JSON);
 
   for (const file of imageFiles) {
     const filePath = path.join(MEME_DIR, file);
@@ -25,6 +27,18 @@ async function main() {
     const hash = await blake3(buffer);
     const name = path.basename(file, path.extname(file));
 
+    // 检查是否名称或hash重复
+    if (memeData[name]?.hash === hash) {
+      console.log(`跳过重复: ${file} -> ${name}`);
+      continue;
+    }
+
+    if (memeData[name]) {
+      console.log(`跳过名称冲突: ${name} -> ${file}`);
+      continue;
+    }
+
+    await fs.copy(filePath, path.join('meme', file));
     memeData[name] = { path: file, hash };
     console.log(`处理: ${file} -> ${name}`);
   }
