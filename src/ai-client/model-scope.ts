@@ -1,5 +1,6 @@
 import { client } from '../utils/http-client.ts';
 import { type AIClient, type AIMessageItem, type ResponseMessage } from './ai-client.ts';
+import * as schedule from 'node-schedule';
 
 const models = [
   'deepseek-ai/DeepSeek-V3.2',
@@ -19,6 +20,9 @@ export class ModelScope implements AIClient {
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+    schedule.scheduleJob('0 0 * * *', () => {
+      this.currentModel = models[0];
+    });
   }
 
   async chat(messages: AIMessageItem[], tools: any): Promise<[true, ResponseMessage] | [false, string]> {
