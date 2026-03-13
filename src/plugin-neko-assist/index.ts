@@ -4,7 +4,7 @@ import { jsonrepair } from 'jsonrepair';
 import dayjs from 'dayjs';
 import { type AIClient, type AIMessageItem } from '../ai-client/ai-client.ts';
 import { type QBotPlugin, type QBot } from '../qbot/index.ts';
-import { debounce, ensureArray, ensureStringId, tryReadJson, tryRun } from '../utils/index.ts';
+import { debounce, ensureArray, ensureStringId, randomInt, tryReadJson, tryRun } from '../utils/index.ts';
 import toolsData from './tools.ts';
 
 export interface NekoAssistInitOptions {
@@ -297,8 +297,11 @@ export class NekoAssist implements QBotPlugin {
         },
       ];
 
-      // 开始 agent 循环
+      /** 是否继续循环 */
       let continueLoop = true;
+
+      /** 本次循环是否为最后的整理记忆阶段 */
+      let isMemoryPhase = false;
 
       while (continueLoop) {
         const [success, message] = await this.aiClient.chat(messageList, toolsData);
@@ -345,7 +348,7 @@ export class NekoAssist implements QBotPlugin {
             continueLoop = false;
           }
           // 执行指令
-          else if (name === 'command' || name === 'command_background') {
+          else if (name === 'command') {
             const [error, json] = tryRun<any>(() => JSON.parse(jsonrepair(args)));
 
             if (error) {
@@ -359,7 +362,7 @@ export class NekoAssist implements QBotPlugin {
             }
 
             const { command } = json;
-            const [success, commandResult] = await qbot.command.invoke(command, userId, name === 'command_background');
+            const [success, commandResult] = await qbot.command.invoke(command, userId, true); // 固定后台执行指令
 
             if (!success) {
               messageList.push({
@@ -367,6 +370,14 @@ export class NekoAssist implements QBotPlugin {
                 tool_call_id: item.id,
                 content: `${command} 执行失败\n${commandResult}\n`,
               });
+
+              qbot.addHistory(
+                `command:${randomInt()}`,
+                qbot.account,
+                `执行指令：${command}\n执行结果：${commandResult}`,
+                Date.now() / 1000
+              );
+
               continue;
             }
 
@@ -375,6 +386,13 @@ export class NekoAssist implements QBotPlugin {
               tool_call_id: item.id,
               content: `${command} 执行成功:\n${commandResult}\n`,
             });
+
+            qbot.addHistory(
+              `command:${randomInt()}`,
+              qbot.account,
+              `执行指令：${command}\n执行结果：${commandResult}`,
+              Date.now() / 1000
+            );
           }
           // 更新记忆
           else if (name === 'memory_update') {
@@ -420,10 +438,17 @@ export class NekoAssist implements QBotPlugin {
           }
         }
 
-        // 如果猫猫的回复没有执行任何 command 的话，也认为对话结束，
-        // 避免出现猫猫忘记调用 finish_chatting 工具的情况
-        if (!tools.some(item => item.function.name === 'command' || item.function.name === 'command_background')) {
+        if (isMemoryPhase) {
           continueLoop = false;
+        }
+        // 如果猫猫的回复没有执行任何 command 的话，认为对话结束，开始整理记忆
+        else if (!tools.some(item => item.function.name === 'command' || item.function.name === 'command_background')) {
+          isMemoryPhase = true;
+          messageList.push({
+            role: 'assistant',
+            content:
+              '[系统提示] 任务完成，请猫猫根据需要整理长期记忆，无需生成文本回复，仅根据需要调用 `command_background` 工具后台执行零或多次 `memory-update <记忆名称> <记忆内容>` 和 `memory-delete <记忆名称>` 系统指令来更新长期记忆。需要记录到长期记忆中的内容包括：关于群友的用户画像，偏好内容，社会关系等；还有群友对猫猫的提出的规则和要求，以及猫猫在执行任务时积累的错误处理经验等内容',
+          });
         }
       }
     } catch (e) {
