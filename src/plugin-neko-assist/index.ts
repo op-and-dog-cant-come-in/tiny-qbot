@@ -325,7 +325,7 @@ export class NekoAssist implements QBotPlugin {
         });
 
         /** 模型的文本回复 */
-        let text = message.content;
+        let text = message.content || '';
 
         // 移除 @ 消息发送者的内容，该内容不必要
         text = text.replace(`[CQ:at,qq=${userId}]`, '').trim();

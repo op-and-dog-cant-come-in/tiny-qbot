@@ -49,7 +49,7 @@ export class ModelScope implements AIClient {
 
         if (!error) {
           const choice = data.choices?.[0];
-          return [true, choice.message || {}];
+          return [true, choice?.message || {}];
         }
 
         // 如果是 429 报错，则更换模型重新请求
